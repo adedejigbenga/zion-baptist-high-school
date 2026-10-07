@@ -19,7 +19,7 @@ export type SignInState = {
   loginId?: string
 }
 
-const GENERIC_ERROR = "Incorrect Login ID or password."
+const GENERIC_ERROR = "Invalid login ID or password."
 
 async function clientIp(): Promise<string | null> {
   const h = await headers()

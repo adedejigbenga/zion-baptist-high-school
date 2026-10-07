@@ -182,7 +182,7 @@ code is small enough to test completely. `AUTH_SECRET` in `.env.example` is curr
      login IDs are real;
    - fail if the password is wrong, the account is inactive, or the account's role is not the portal's role; the
      role/profile must also be consistent (a STUDENT must have a `Student` row);
-   - **every failure returns the same result to the browser** ("Incorrect Login ID or password."); the true reason
+   - **every failure returns the same result to the browser** ("Invalid login ID or password."); the true reason
      (`unknown_login_id`, `wrong_password`, `inactive_account`, `wrong_portal`, `inconsistent_account`) goes only to the audit log.
 3. **Session creation:** a 256-bit random token (`crypto.randomBytes(32)`, base64url) is generated. **Only its SHA-256
    hash** is stored in `Session.tokenHash`; the raw token exists only in the cookie. Sessions older than a week are purged opportunistically.
@@ -196,29 +196,46 @@ code is small enough to test completely. `AUTH_SECRET` in `.env.example` is curr
 - `getCurrentUser()` (`src/lib/auth/current-user.ts`) reads the cookie, hashes it, loads the session and user, and returns
   a narrow `SessionUser` (id, loginId, role, names, and exactly one of `studentId` / `teacherId` / `adminId`), or `null`.
   Memoised per request with React `cache`. Because it reads cookies, it must run under `<Suspense>` (Cache Components).
-- A session is valid only if it is not revoked, not past `expiresAt`, not idle too long, and the **user is still active**.
-  The database is consulted every time, so revocation and deactivation take effect immediately.
+- **Function map** (all server-only, in `src/lib/auth/`): `createSession()` (service.ts), `validateSessionToken()` =
+  "get current session" (service.ts), `getCurrentUser()`, `requireUser()`, `requireRole(role)` (current-user.ts),
+  `revokeSessionByToken()` = revoke session, `revokeAllSessionsForUser()` (service.ts), `setSessionCookie()` /
+  `clearSessionCookie()` (cookies.ts), `hashPassword()` / `verifyPassword()` (password.ts), `SESSION_*` and `RATE_LIMIT`
+  constants (config.ts).
+- A session is valid only if it is not revoked, not past `expiresAt`, not idle too long, and the **user is still active**
+  (and the account's role has its matching profile). The database is consulted every time, so revocation and deactivation
+  take effect immediately. A session found expired or idle is **marked revoked** on the spot (one write, once).
+- **Stale cookies are removed.** A page cannot delete a cookie while rendering, so when a request carries a cookie that no
+  longer maps to a valid session, `requireRole()` / `requireUser()` redirect to `/portal/session-ended?to=<sign-in page>`
+  (`src/app/portal/session-ended/route.ts`). That route re-validates, deletes the dead cookie (same attributes it was set
+  with) and redirects to an **allow-listed** sign-in page. It never touches a valid session, so a link to it cannot sign
+  anyone out, and it cannot be used as an open redirect (both covered by tests).
 - Lifetimes (`src/lib/auth/config.ts`): students and teachers 7 days absolute / 24 hours idle; administrators 12 hours
   absolute / 2 hours idle. `lastUsedAt` is refreshed at most every 5 minutes.
 - **`proxy.ts`** is only an optimistic gate: if there is no session cookie, `/portal/student|teacher|admin/**` (except
   `/login`) redirects to the right sign-in page. It never queries the database and never decides roles; a forged or expired
   cookie passes it on purpose and is rejected by the server-side check.
 - `requireRole(role)` is called at the top of every protected page (and must be called in every Server Action and
-  data function that returns private data). Not signed in -> that role's sign-in page; wrong role -> the user's own home.
+  data function that returns private data). Not signed in -> that role's sign-in page; wrong role -> access denied,
+  sent to the user's own home (a student opening `/portal/teacher` never sees teacher content).
+- **`/portal` gateway:** for a visitor with a valid session it also shows "You are signed in as ..." with a
+  "Continue to your dashboard" button and Logout. It never redirects automatically, so there is no redirect loop.
   **The protected layout is only a frame**: layouts do not re-run on client-side navigation, so they are never the security check.
 
 ### 4.3 Brute-force protection
 
-Failed sign-ins are counted from the audit log (no Redis, no extra table): **5 failures per login ID** or **20 per IP
-address** within **15 minutes** blocks further attempts, even with the correct password (the block is also audited).
+Failed sign-ins are counted from the audit log (no Redis, **no schema change needed**): **8 failures per login ID**
+within **15 minutes** blocks that ID, even with the correct password (the block is also audited). The **per-IP limit is
+deliberately high (100 failures in 15 minutes)**: a whole school or computer lab can share one public IP address, and many
+students mistyping at once must never lock everyone out; it only stops very large automated attacks from one address.
 Login IDs are counted by a SHA-256 key, so non-existent IDs are limited exactly like real ones and typed values (which
 may be a password typed into the wrong box) are never stored in clear. Trade-offs: a person can lock a specific account
-for 15 minutes by failing deliberately (accepted); the IP is trusted only behind Vercel, where the platform sets
-`x-forwarded-for` (locally it can be spoofed).
+for 15 minutes by failing deliberately (accepted; an admin unlock screen can come later); the IP is trusted only behind
+Vercel, where the platform sets `x-forwarded-for` (locally it can be spoofed). The limits are constants in
+`src/lib/auth/config.ts`.
 
 ### 4.4 Sign-out
 
-The `signOut` Server Action (a real `<form>` POST) revokes the session in the database (`revokedAt`), records
+The `signOut` Server Action (the **Logout** button, a real `<form>` POST) revokes the session in the database (`revokedAt`), records
 `AUTH_LOGOUT`, and expires the cookie by overwriting it with the **same attributes** (a `__Host-` cookie ignores a
 change that lacks `Secure`, so `cookies().delete()` is not used). `revokeAllSessionsForUser()` exists for password
 changes and deactivation.
@@ -230,7 +247,7 @@ login ID, failure reason). Never passwords, tokens or typed login IDs.
 
 ### 4.6 Testing
 
-- **Unit and database tests** (`npm test`, vitest, 37 tests): token and password handling, input validation, configuration,
+- **Unit and database tests** (`npm test`, vitest, 45 tests): token and password handling, input validation, configuration,
   sign-in success and every failure mode, rate limiting (per login ID, per IP, window expiry), session expiry, idle
   timeout, revocation, deactivation, role/profile consistency. Database tests run against a separate `*_test` database
   that is created and migrated automatically and can never be the development database. The tests were checked by
@@ -242,7 +259,7 @@ login ID, failure reason). Never passwords, tokens or typed login IDs.
 
 ### 4.7 Not built yet
 
-Password change and reset, "sign out everywhere" UI, redirecting already-signed-in users away from login pages, CAPTCHA,
+Password change and reset, "sign out everywhere" UI, an admin unlock screen for rate-limited accounts, CAPTCHA,
 multi-factor authentication for administrators, and use of `AUTH_SECRET` (reserved for signing future tokens such as
 password-reset links). Registration is not planned: accounts are created by an administrator.
 

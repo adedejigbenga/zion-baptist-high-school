@@ -23,18 +23,35 @@ export const SESSION_LIFETIMES: Record<Role, { absolute: number; idle: number }>
   ADMIN: { absolute: 12 * HOUR, idle: 2 * HOUR },
 }
 
+/**
+ * Cookie attributes. The same set is used to create AND to expire the cookie: browsers ignore a change to a
+ * `__Host-` cookie that does not also carry Secure and Path=/.
+ */
+export const SESSION_COOKIE_BASE = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: "lax",
+  path: "/",
+} as const
+
+/** Route that clears a stale (invalid/expired/revoked) session cookie, then sends the visitor to sign in. */
+export const SESSION_ENDED_PATH = "/portal/session-ended"
+
 /** lastUsedAt is refreshed at most this often, so a page view does not cause a database write every time. */
 export const LAST_USED_REFRESH_SECONDS = 5 * 60
 
 /**
  * Brute-force protection. Failed sign-ins are counted from the audit log (no extra table, no Redis).
- * Trade-off: someone can lock a specific account for the window by failing on purpose; that is accepted
- * because the alternative (no limit) lets attackers guess passwords.
+ *
+ * - Per login ID: the main defence against password guessing. 8 failures in 15 minutes blocks that ID (a child who
+ *   mistypes a few times is fine). Trade-off: someone can lock a specific account for the window by failing on purpose.
+ * - Per IP: deliberately HIGH. A whole school (or a computer lab) can share one public IP address, and many students
+ *   mistyping at once must never lock everyone out. This only stops very large automated attacks from one address.
  */
 export const RATE_LIMIT = {
   windowSeconds: 15 * 60,
-  maxFailuresPerLoginId: 5,
-  maxFailuresPerIp: 20,
+  maxFailuresPerLoginId: 8,
+  maxFailuresPerIp: 100,
 } as const
 
 /** Where each role lands after signing in (and which role may see which area). */
@@ -42,6 +59,13 @@ export const ROLE_HOME: Record<Role, string> = {
   STUDENT: "/portal/student",
   TEACHER: "/portal/teacher",
   ADMIN: "/portal/admin",
+}
+
+/** Display name of each role's portal. */
+export const ROLE_PORTAL_NAME: Record<Role, string> = {
+  STUDENT: "Student Portal",
+  TEACHER: "Teacher Portal",
+  ADMIN: "Admin Portal",
 }
 
 /** Portal login page -> the role that may sign in there. */

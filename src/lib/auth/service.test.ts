@@ -5,6 +5,7 @@ import { AUTH_AUDIT, LAST_USED_REFRESH_SECONDS, RATE_LIMIT, SESSION_LIFETIMES } 
 import { hash } from "@node-rs/argon2"
 import {
   authenticate,
+  createSession,
   revokeAllSessionsForUser,
   revokeSessionByToken,
   validateSessionToken,
@@ -259,5 +260,46 @@ describe("signing out and revoking", () => {
     expect(await validateSessionToken(first.token)).toBeNull()
     expect(await validateSessionToken(second.token)).toBeNull()
     expect(await validateSessionToken(other.token)).not.toBeNull()
+  })
+})
+
+describe("createSession", () => {
+  it("creates a session for an authenticated user and stores only the token hash", async () => {
+    const user = await createUser({ loginId: "ZBHS/T/1", role: "STUDENT", passwordHash })
+    const { token, expiresAt } = await createSession({ id: user.id, role: "STUDENT" })
+
+    expect(token.length).toBeGreaterThanOrEqual(43)
+    const row = await db.session.findFirstOrThrow()
+    expect(row.tokenHash).toBe(hashSessionToken(token))
+    expect(row.expiresAt).toEqual(expiresAt)
+    expect(JSON.stringify(row)).not.toContain(token)
+    expect((await validateSessionToken(token))?.id).toBe(user.id)
+  })
+})
+
+describe("expired sessions", () => {
+  it("are revoked the first time they are noticed, not just ignored", async () => {
+    const { token } = await signedInStudent()
+    await db.session.updateMany({ data: { expiresAt: secondsAgo(1) } })
+    expect((await db.session.findFirstOrThrow()).revokedAt).toBeNull()
+
+    expect(await validateSessionToken(token)).toBeNull()
+    expect((await db.session.findFirstOrThrow()).revokedAt).not.toBeNull()
+  })
+
+  it("also revokes a session that was idle for too long", async () => {
+    const { token } = await signedInStudent()
+    await db.session.updateMany({ data: { lastUsedAt: secondsAgo(SESSION_LIFETIMES.STUDENT.idle + 60) } })
+    expect(await validateSessionToken(token)).toBeNull()
+    expect((await db.session.findFirstOrThrow()).revokedAt).not.toBeNull()
+  })
+
+  it("does not rewrite revokedAt on later checks", async () => {
+    const { token } = await signedInStudent()
+    await db.session.updateMany({ data: { expiresAt: secondsAgo(1) } })
+    await validateSessionToken(token)
+    const first = (await db.session.findFirstOrThrow()).revokedAt
+    await validateSessionToken(token)
+    expect((await db.session.findFirstOrThrow()).revokedAt).toEqual(first)
   })
 })

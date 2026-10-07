@@ -4,9 +4,8 @@ import { BrandLogo } from "@/components/layout/brand-logo"
 import { SignOutButton } from "@/components/portal/sign-out-button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ROLE_PORTAL_NAME } from "@/lib/auth/config"
 import { getCurrentUser } from "@/lib/auth/current-user"
-
-const ROLE_LABEL = { STUDENT: "Student", TEACHER: "Teacher", ADMIN: "Administrator" } as const
 
 /** Who is signed in. Reads the session, so it streams in behind <Suspense>. */
 async function CurrentUserBadge() {
@@ -17,7 +16,10 @@ async function CurrentUserBadge() {
       <span className="hidden type-label text-foreground sm:inline">
         {user.firstName} {user.lastName}
       </span>
-      <Badge variant="secondary">{ROLE_LABEL[user.role]}</Badge>
+      {/* Hidden on phones: the logo, badge and Logout button do not fit in one row at 320px. The role is also shown on the page. */}
+      <div className="hidden sm:block">
+        <Badge variant="secondary">{ROLE_PORTAL_NAME[user.role]}</Badge>
+      </div>
     </div>
   )
 }
@@ -33,7 +35,7 @@ function PortalAppShell({ children }: { children: React.ReactNode }) {
         <div className="page-container flex h-16 items-center justify-between gap-4">
           <BrandLogo />
           <div className="flex items-center gap-3">
-            <React.Suspense fallback={<Skeleton className="h-6 w-28" />}>
+            <React.Suspense fallback={<Skeleton className="hidden h-6 w-28 sm:block" />}>
               <CurrentUserBadge />
             </React.Suspense>
             <SignOutButton />

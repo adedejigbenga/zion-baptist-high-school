@@ -56,8 +56,9 @@ session/term/default scheme, score and weight checks, grade-band overlap). Keep 
 
 ### Demo accounts (DEVELOPMENT ONLY)
 
-> **DEVELOPMENT ONLY.** These accounts exist only in the local seed data. All data is fictional. The password below is
-> public and must never be used in any real or production environment. Passwords are stored as Argon2id hashes.
+> **DEVELOPMENT ONLY — NEVER USE IN PRODUCTION.** These accounts exist only in the local seed data. All data is
+> fictional. The password below is written in this README, so treat it as public: it must never be used in any real or
+> production environment. Passwords are stored as Argon2id hashes.
 
 Shared demo password: `ZionDemo#2026`
 
@@ -74,9 +75,33 @@ Shared demo password: `ZionDemo#2026`
 | Student | `ZBHS/2026/005` David Peter | SS 1: no result yet |
 | Student | `ZBHS/2026/006` Ruth Samuel | SS 3: no result yet |
 
-Sign in at `/portal` (choose the portal that matches the account). After 5 wrong attempts for one Login ID within 15 minutes
-further attempts are blocked for the rest of that window; to clear it while developing, run
-`DELETE FROM "AuditLog" WHERE action LIKE 'AUTH_%';` against the development database.
+### How sign-in works locally
+
+1. Start the database and the app (`npm run dev`), make sure the seed has run (`npm run db:seed`).
+2. Open http://localhost:3000/portal and choose the portal that matches the account, or go straight to
+   `/portal/student/login`, `/portal/teacher/login` or `/portal/admin/login`.
+3. Enter the **Login ID** and the shared demo password. You land on a temporary welcome page for that role
+   (`/portal/student`, `/portal/teacher`, `/portal/admin`). The real dashboards are not built yet.
+4. **Log out** with the Logout button in the page header. This revokes the session in the database and removes the cookie.
+
+How to test each role (DEVELOPMENT ONLY — NEVER USE IN PRODUCTION):
+
+| Role | Portal | Login ID | Password | Lands on |
+|---|---|---|---|---|
+| Student | `/portal/student/login` | `ZBHS/2026/001` | `ZionDemo#2026` | `/portal/student` |
+| Teacher | `/portal/teacher/login` | `teacher.math` | `ZionDemo#2026` | `/portal/teacher` |
+| Admin | `/portal/admin/login` | `admin.demo` | `ZionDemo#2026` | `/portal/admin` |
+
+Good things to try: sign in as a student, then type `/portal/teacher` or `/portal/admin` in the address bar (you are sent
+back to your own page); a wrong password shows "Invalid login ID or password."; after Logout, the browser's Back button no
+longer shows protected content.
+
+Facts about the implementation: the session is a random token in an HttpOnly cookie (`zbhs_session` locally,
+`__Host-zbhs_session` in production); only a hash of it is stored in the `Session` table; students and teachers stay
+signed in for up to 7 days (24 hours idle), administrators for 12 hours (2 hours idle); nothing is kept in localStorage.
+After 8 wrong attempts for one Login ID within 15 minutes, further attempts for that ID are blocked for the rest of that
+window. To clear it while developing, run `DELETE FROM "AuditLog" WHERE action LIKE 'AUTH_%';` against the development
+database. Details: [ARCHITECTURE.md](ARCHITECTURE.md), section 4.
 
 ## Running the Tests
 

@@ -9,7 +9,7 @@ function SignOutButton() {
     <form action={signOut}>
       <Button type="submit" variant="outline" size="sm">
         <LogOutIcon aria-hidden="true" />
-        Sign out
+        Logout
       </Button>
     </form>
   )

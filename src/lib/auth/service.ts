@@ -1,5 +1,6 @@
 import "server-only"
 
+import type { Role } from "@/generated/prisma/enums"
 import type { Prisma } from "@/generated/prisma/client"
 import { db } from "@/lib/db"
 import {
@@ -83,6 +84,21 @@ async function isRateLimited(loginIdHash: string, ip: string | null): Promise<bo
 }
 
 // ------------------------------------------------------------------------------------------------------
+// Creating a session
+// ------------------------------------------------------------------------------------------------------
+
+/**
+ * Creates a database session for a user who has ALREADY been authenticated. Returns the raw token (to put in the
+ * cookie) and its expiry. Only the SHA-256 hash of the token is stored.
+ */
+export async function createSession(user: { id: string; role: Role }): Promise<{ token: string; expiresAt: Date }> {
+  const token = generateSessionToken()
+  const expiresAt = new Date(Date.now() + SESSION_LIFETIMES[user.role].absolute * 1000)
+  await db.session.create({ data: { userId: user.id, tokenHash: hashSessionToken(token), expiresAt } })
+  return { token, expiresAt }
+}
+
+// ------------------------------------------------------------------------------------------------------
 // Sign in
 // ------------------------------------------------------------------------------------------------------
 
@@ -138,9 +154,7 @@ export async function authenticate(input: AuthenticateInput): Promise<Authentica
     return { ok: false, reason: "INVALID_CREDENTIALS" }
   }
 
-  const token = generateSessionToken()
-  const expiresAt = new Date(Date.now() + SESSION_LIFETIMES[user.role].absolute * 1000)
-  await db.session.create({ data: { userId: user.id, tokenHash: hashSessionToken(token), expiresAt } })
+  const { token, expiresAt } = await createSession(user)
   await writeAudit({ userId: user.id, action: AUTH_AUDIT.loginSuccess, metadata: { ip, portal: input.portal } })
 
   await purgeOldSessions()
@@ -179,8 +193,13 @@ export async function validateSessionToken(token: string | undefined): Promise<S
   const { idle } = SESSION_LIFETIMES[session.user.role]
 
   if (session.revokedAt) return null
-  if (session.expiresAt.getTime() <= now) return null
-  if (now - session.lastUsedAt.getTime() > idle * 1000) return null
+
+  // Expired or idle for too long: end it for good (one write, the first time it is noticed), then refuse.
+  if (session.expiresAt.getTime() <= now || now - session.lastUsedAt.getTime() > idle * 1000) {
+    await revokeSessionRow(session.id)
+    return null
+  }
+
   if (!session.user.isActive) return null
 
   const user = toSessionUser(session.user)
@@ -196,6 +215,15 @@ export async function validateSessionToken(token: string | undefined): Promise<S
 // ------------------------------------------------------------------------------------------------------
 // Ending sessions
 // ------------------------------------------------------------------------------------------------------
+
+/** Marks one session revoked if it is not already. A failure here must never break the request that noticed it. */
+async function revokeSessionRow(sessionId: string): Promise<void> {
+  try {
+    await db.session.updateMany({ where: { id: sessionId, revokedAt: null }, data: { revokedAt: new Date() } })
+  } catch {
+    // the session is refused either way; the housekeeping will catch up
+  }
+}
 
 /** Sign out: revokes the session that owns this token (idempotent) and records it. */
 export async function revokeSessionByToken(token: string | undefined): Promise<void> {
