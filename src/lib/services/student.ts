@@ -4,7 +4,9 @@ import { cache } from "react"
 import { redirect } from "next/navigation"
 
 import { requireRole } from "@/lib/auth/current-user"
+import { loadStudentResultView } from "@/lib/services/results"
 import { loadStudentDashboard, loadStudentProfileSummary } from "@/lib/services/student-dashboard"
+import type { StudentResultView } from "@/types/results"
 import type { StudentDashboard, StudentProfileSummary } from "@/types/student"
 
 /**
@@ -35,4 +37,13 @@ export const getStudentDashboard = cache(async (): Promise<StudentDashboard> => 
   const dashboard = await loadStudentDashboard(studentId, new Date())
   if (!dashboard) redirect("/portal")
   return dashboard
+})
+
+/**
+ * The student result page. `termKey` (from the URL, optional) can only choose among THIS student's own terms; it is
+ * never a student identifier. Only a PUBLISHED result ever contains marks (see results.ts).
+ */
+export const getStudentResultView = cache(async (termKey: string | undefined): Promise<StudentResultView> => {
+  const studentId = await currentStudentId()
+  return loadStudentResultView(studentId, termKey, new Date())
 })

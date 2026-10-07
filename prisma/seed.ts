@@ -54,6 +54,20 @@ const TERMS: { name: TermName; startDate: string; endDate: string; isCurrent: bo
   { name: TermName.THIRD, startDate: "2027-04-26", endDate: "2027-07-23", isCurrent: false },
 ]
 
+/** Last year's session, so students have result history across sessions. Not current. */
+const PAST_SESSION = { name: "2025/2026", startDate: "2025-09-15", endDate: "2026-07-24" }
+const PAST_TERMS: { name: TermName; startDate: string; endDate: string }[] = [
+  { name: TermName.FIRST, startDate: "2025-09-15", endDate: "2025-12-19" },
+  { name: TermName.SECOND, startDate: "2026-01-12", endDate: "2026-04-03" },
+  { name: TermName.THIRD, startDate: "2026-04-27", endDate: "2026-07-24" },
+]
+
+/** Class each student was in during the past session (they have moved up since). */
+const PAST_ENROLLMENTS: [admissionNumber: string, className: string][] = [
+  ["ZBHS/2026/003", "JSS 1"], // Samuel James is in JSS 2 now
+  ["ZBHS/2026/004", "JSS 3"], // Esther Cole is in SS 1 now
+]
+
 const CLASSES = [
   { name: "JSS 1", level: 1 },
   { name: "JSS 2", level: 2 },
@@ -131,11 +145,18 @@ const GRADE_BANDS = [
   { grade: "F", minScore: 0, maxScore: 39.99, remark: "Fail", sortOrder: 5 },
 ]
 
-/** Demo results for the FIRST term. scores: [subject code, CA, Exam]. */
+/**
+ * Demo results. scores: [subject code, CA, Exam]. Without session/term a result belongs to the current session's
+ * FIRST term; className is the class the student was in at the time.
+ */
 const DEMO_RESULTS: {
   admissionNumber: string
   status: ResultStatus
   scores: [string, number, number][]
+  session?: string
+  term?: TermName
+  className?: string
+  publishedAt?: string
 }[] = [
   {
     admissionNumber: "ZBHS/2026/001", // Daniel Ade, JSS 1: the one PUBLISHED result
@@ -156,6 +177,25 @@ const DEMO_RESULTS: {
     admissionNumber: "ZBHS/2026/003", // Samuel James, JSS 2: draft
     status: ResultStatus.DRAFT,
     scores: [["ENG", 24, 36], ["MTH", 15, 22]],
+  },
+  // ---- last session (history) ----
+  {
+    admissionNumber: "ZBHS/2026/003", // Samuel James, was in JSS 1: Third Term published
+    status: ResultStatus.PUBLISHED,
+    session: PAST_SESSION.name, term: TermName.THIRD, className: "JSS 1", publishedAt: "2026-07-25T10:00:00.000Z",
+    scores: [["ENG", 28, 41], ["MTH", 19, 27], ["CMP", 33, 50], ["CVE", 30, 46]],
+  },
+  {
+    admissionNumber: "ZBHS/2026/003", // Samuel James: Second Term still a draft (an unpublished past term)
+    status: ResultStatus.DRAFT,
+    session: PAST_SESSION.name, term: TermName.SECOND, className: "JSS 1",
+    scores: [["ENG", 26, 38], ["MTH", 17, 25]],
+  },
+  {
+    admissionNumber: "ZBHS/2026/004", // Esther Cole, was in JSS 3: Third Term published
+    status: ResultStatus.PUBLISHED,
+    session: PAST_SESSION.name, term: TermName.THIRD, className: "JSS 3", publishedAt: "2026-07-25T10:00:00.000Z",
+    scores: [["ENG", 35, 54], ["MTH", 31, 47], ["CMP", 36, 55], ["CVE", 34, 52]],
   },
 ]
 
@@ -267,6 +307,26 @@ async function main() {
     terms.set(t.name, term)
   }
 
+  // Last year's session and terms (not current)
+  const pastSession = await prisma.academicSession.upsert({
+    where: { name: PAST_SESSION.name },
+    create: { name: PAST_SESSION.name, startDate: asDate(PAST_SESSION.startDate), endDate: asDate(PAST_SESSION.endDate), isCurrent: false },
+    update: { startDate: asDate(PAST_SESSION.startDate), endDate: asDate(PAST_SESSION.endDate), isCurrent: false },
+  })
+  const pastTerms = new Map<TermName, { id: string }>()
+  for (const t of PAST_TERMS) {
+    const term = await prisma.term.upsert({
+      where: { sessionId_name: { sessionId: pastSession.id, name: t.name } },
+      create: { sessionId: pastSession.id, name: t.name, startDate: asDate(t.startDate), endDate: asDate(t.endDate), isCurrent: false },
+      update: { startDate: asDate(t.startDate), endDate: asDate(t.endDate), isCurrent: false },
+    })
+    pastTerms.set(t.name, term)
+  }
+  const sessionsByName = new Map<string, { id: string; terms: Map<TermName, { id: string }> }>([
+    [session.name, { id: session.id, terms }],
+    [pastSession.name, { id: pastSession.id, terms: pastTerms }],
+  ])
+
   // Classes (section is null, so (name, section) cannot be used as an upsert key)
   const classes = new Map<string, { id: string }>()
   for (const c of CLASSES) {
@@ -289,15 +349,17 @@ async function main() {
   }
 
   // Class subjects
-  for (const [className, codes] of Object.entries(CLASS_SUBJECTS)) {
-    const classId = must(classes, className, "class").id
-    for (const code of codes) {
-      const subjectId = must(subjects, code, "subject").id
-      await prisma.classSubject.upsert({
-        where: { classId_subjectId_sessionId: { classId, subjectId, sessionId: session.id } },
-        create: { classId, subjectId, sessionId: session.id },
-        update: {},
-      })
+  for (const offeredIn of [session, pastSession]) {
+    for (const [className, codes] of Object.entries(CLASS_SUBJECTS)) {
+      const classId = must(classes, className, "class").id
+      for (const code of codes) {
+        const subjectId = must(subjects, code, "subject").id
+        await prisma.classSubject.upsert({
+          where: { classId_subjectId_sessionId: { classId, subjectId, sessionId: offeredIn.id } },
+          create: { classId, subjectId, sessionId: offeredIn.id },
+          update: {},
+        })
+      }
     }
   }
 
@@ -344,6 +406,17 @@ async function main() {
     students.set(s.admissionNumber, { id: student.id, classId })
   }
 
+  // Last session's classes (history)
+  for (const [admissionNumber, className] of PAST_ENROLLMENTS) {
+    const studentId = must(students, admissionNumber, "student").id
+    const classId = must(classes, className, "class").id
+    await prisma.studentEnrollment.upsert({
+      where: { studentId_sessionId: { studentId, sessionId: pastSession.id } },
+      create: { studentId, classId, sessionId: pastSession.id, isActive: false },
+      update: { classId, isActive: false },
+    })
+  }
+
   // Grading scheme, components and bands (values live in the database, not in application code)
   const scheme = await prisma.gradingScheme.upsert({
     where: { name: GRADING_SCHEME.name },
@@ -380,29 +453,33 @@ async function main() {
     return { total, grade: band.grade, remark: band.remark }
   }
 
-  // Demo results (first term)
-  const firstTermId = must(terms as Map<string, { id: string }>, TermName.FIRST, "term").id
+  // Demo results (current session and last session)
   for (const r of DEMO_RESULTS) {
     const student = must(students, r.admissionNumber, "student")
     const published = r.status === ResultStatus.PUBLISHED
+    const resultSession = must(sessionsByName, r.session ?? session.name, "session")
+    const resultSessionId = resultSession.id
+    const resultTermId = must(resultSession.terms as Map<string, { id: string }>, r.term ?? TermName.FIRST, "term").id
+    const resultClassId = r.className ? must(classes, r.className, "class").id : student.classId
+    const resultPublishedAt = r.publishedAt ? new Date(r.publishedAt) : PUBLISHED_AT
 
     const result = await prisma.result.upsert({
-      where: { studentId_sessionId_termId: { studentId: student.id, sessionId: session.id, termId: firstTermId } },
+      where: { studentId_sessionId_termId: { studentId: student.id, sessionId: resultSessionId, termId: resultTermId } },
       create: {
         studentId: student.id,
-        sessionId: session.id,
-        termId: firstTermId,
-        classId: student.classId,
+        sessionId: resultSessionId,
+        termId: resultTermId,
+        classId: resultClassId,
         gradingSchemeId: scheme.id,
         status: r.status,
-        publishedAt: published ? PUBLISHED_AT : null,
+        publishedAt: published ? resultPublishedAt : null,
         publishedById: published ? adminUser.id : null,
       },
       update: {
-        classId: student.classId,
+        classId: resultClassId,
         gradingSchemeId: scheme.id,
         status: r.status,
-        publishedAt: published ? PUBLISHED_AT : null,
+        publishedAt: published ? resultPublishedAt : null,
         publishedById: published ? adminUser.id : null,
       },
     })
@@ -429,10 +506,10 @@ async function main() {
     if (published) {
       const already = await prisma.resultPublication.findFirst({ where: { resultId: result.id, action: "PUBLISHED" } })
       if (already) {
-        await prisma.resultPublication.update({ where: { id: already.id }, data: { publishedAt: PUBLISHED_AT, publishedById: adminUser.id } })
+        await prisma.resultPublication.update({ where: { id: already.id }, data: { publishedAt: resultPublishedAt, publishedById: adminUser.id } })
       } else {
         await prisma.resultPublication.create({
-          data: { resultId: result.id, publishedById: adminUser.id, publishedAt: PUBLISHED_AT, action: "PUBLISHED" },
+          data: { resultId: result.id, publishedById: adminUser.id, publishedAt: resultPublishedAt, action: "PUBLISHED" },
         })
       }
     }

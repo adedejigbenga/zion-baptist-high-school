@@ -366,3 +366,23 @@
   }
 }
 
+
+/* ---------- Print (result sheet): A4, no app chrome, black on white ---------- */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 14mm;
+  }
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  a {
+    text-decoration: none;
+  }
+}

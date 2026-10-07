@@ -1,8 +1,8 @@
 # Zion Baptist High School - Architecture
 
-> Status: **design document.** Authentication (section 4), the database (section 6) and the student dashboard (section 7.1) are implemented: `prisma/schema.prisma`, the migration
+> Status: **design document.** Authentication (section 4), the database (section 6), the student dashboard (7.1) and the student result viewer (7.2) are implemented: `prisma/schema.prisma`, the migration
 > `init_school_portal` applied to a local PostgreSQL 17 database, and a development seed. Role-based access exists for all
-> portal areas. The teacher and admin dashboards, the detailed result page and result entry are not built yet.
+> portal areas. The teacher and admin dashboards and result entry/publishing are not built yet.
 
 Stack: Next.js 16 (App Router, Cache Components enabled), TypeScript, Tailwind CSS 4, shadcn/ui,
 PostgreSQL + Prisma 7.10, Zod 4. Deployment target: Vercel, with PostgreSQL hosted separately.
@@ -455,10 +455,11 @@ later as a non-breaking migration if needed.
 
 Fictional data only, safe to re-run (verified: identical row counts and unchanged password hashes on a second run).
 Contents: 1 admin, 3 teachers (`TCH001`-`TCH003`), 6 students (`ZBHS/2026/001`-`006`, who log in with their admission
-number), session 2026/2027 with FIRST (current), SECOND and THIRD terms, classes JSS 1 - SS 3, 8 subjects, 36 class-subject
-offerings, 12 teacher assignments, 6 enrolments, the grading scheme "Standard Secondary School Grading" (CA 40 / Exam 60;
-bands A 70-100, B 60-69.99, C 50-59.99, D 40-49.99, F 0-39.99), and 4 First Term results: 1 PUBLISHED (with its
-`ResultPublication` row), 1 SUBMITTED, 2 DRAFT, with 13 entries and 26 component scores whose totals, grades and remarks
+number), session 2026/2027 with FIRST (current), SECOND and THIRD terms plus last session 2025/2026 (not current, three terms), classes JSS 1 - SS 3,
+8 subjects, 72 class-subject offerings (both sessions), 12 teacher assignments, 8 enrolments (6 current, 2 historical), the grading scheme "Standard Secondary School Grading" (CA 40 / Exam 60;
+bands A 70-100, B 60-69.99, C 50-59.99, D 40-49.99, F 0-39.99), and 7 results: this session's First Term (Daniel PUBLISHED, Grace SUBMITTED, Esther and Samuel DRAFT) and last session's history
+(Samuel's Third Term PUBLISHED and Second Term DRAFT, Esther's Third Term PUBLISHED, each in the class the student was in then),
+with 3 `ResultPublication` rows, 23 entries and 46 component scores whose totals, grades and remarks
 are computed from the grading rows in the database, plus 8 announcements (5 visible to the right audiences and 3 that must stay hidden:
 unpublished, expired, and scheduled for the future) used to check the student dashboard's filtering. All demo accounts share one documented DEVELOPMENT-ONLY password,
 stored only as an Argon2id hash. The seed never runs when `NODE_ENV=production` or against a non-local database.
@@ -537,8 +538,52 @@ the class, and the names all come from PostgreSQL; nothing is hard-coded.
 **Layout and rendering.** Sidebar from `lg`; below that a compact header with a menu sheet. The dashboard is a single column
 until `xl` (1280px), then two columns. The student layout is a frame only (it protects nothing); each page and data function
 checks the session. With Cache Components, the session-reading parts are under `<Suspense>`: the static frame and skeletons
-are prerendered and the user's data streams in (route type "Partial Prerender"). `/portal/student/results`, `/profile` and
+are prerendered and the user's data streams in (route type "Partial Prerender"). `/portal/student/profile` and
 `/announcements` are temporary "coming soon" pages that enforce the role and show no data, so the sidebar never leads to a 404.
+
+### 7.2 Student result viewer (implemented: `/portal/student/results`)
+
+**Who.** Same rule as the dashboard: the student is whoever is signed in. `getStudentResultView(termKey?)`
+(`src/lib/services/student.ts`) takes **no student ID**; it validates the session, takes `studentId` from it and passes it to
+`src/lib/services/results.ts`. There is no `/results/[studentId]`; `?studentId=`, `?admission=` and every other query
+parameter are ignored, and `/portal/student/results/<anything>` is a 404. Teachers and admins are turned away (redirect
+to their own home); signed-out visitors go to the student sign-in page. Verified in the browser, including the raw
+server-component payload requested with the `RSC: 1` header.
+
+**Choosing a term.** The page URL can carry `?term=2026-2027-first`: a *term reference* built from the session name and term
+name, never a database ID. The server matches it only against **this student's own** list of terms and redirects to the
+default when it is unknown, malformed, repeated, or belongs to a session the student was never part of. The list contains
+terms of the sessions the student was enrolled in (or has a published result in) that have started, plus any term with a
+published result, newest first; **only published results count when deciding what to list**, so a draft cannot make a term
+appear. The default is the current term, otherwise the newest. The selector is a native `<select>` inside a Next.js GET
+`<Form>` (client-side navigation; a "View" button appears without JavaScript).
+
+**Privacy.** A `ResultSheet` (`src/types/results.ts`) exists only for a PUBLISHED result. The marks query contains
+`status: "PUBLISHED"` in its `where`, so draft and submitted marks are never even read from the database. Every
+non-published situation (draft, submitted, nothing yet) returns the same status-only view and the same message:
+"Result Upload in Progress. Your result for this term has not been published yet. Please check back later."
+No database IDs appear in any payload. Tests: unit tests give DRAFT/SUBMITTED results secret values and assert none appear in
+the returned object; browser tests scan the HTML and every server response for subject names, marks, remarks and sheet markers.
+
+**Data shown.** Everything comes from the database and nothing is recalculated: columns are the assessment components of
+the result's **own grading scheme** (so an old term keeps its old columns after the scheme changes, and adding a "Practical"
+component makes a new column appear with no code change); per-subject total, grade and remark are the **stored snapshots**;
+the grading key is the scheme's own `GradeBand` rows; the class shown is the class the student was in **at that time**.
+Summary: number of subjects, overall total (sum of stored totals), average (that sum divided by the number of subjects
+that have a total, 2 decimal places) and a count of subjects per stored grade, ordered as the scheme's grade bands.
+No grade letter, band or component name is written in the UI code.
+
+**Layout and printing.** A white result "sheet" with the school mark and name, student details, table, summary and grading
+key. On phones the table is full-width inside the sheet, the remark moves under the subject name and the cells tighten, so
+Subject, each component, Total and Grade fit a 320px screen without scrolling; a scheme with many components still keeps the page
+from overflowing by scrolling the table inside its own focusable box. "Print Result" calls `window.print()`; print styles
+(`print:` utilities and an `@media print` block in `globals.css`) hide the sidebar, header, term selector and buttons and
+set A4 portrait with 14 mm margins, black-on-white with ruled table lines. It fits one A4 page. No PDF generator exists.
+
+**Reuse.** `results.ts` is deliberately written for later screens: `listAvailableTerms`, `loadPublishedResult` and the pure
+`buildResultSheet` take an explicit student ID and **authorize nothing**; the teacher and admin screens must call them only
+after their own authorization checks (assignment for teachers, role for admins). Student pages call them only through
+`student.ts`.
 
 ---
 

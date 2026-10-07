@@ -23,3 +23,8 @@ export function excerpt(text: string, max = 140): string {
 export function initials(firstName: string, lastName: string): string {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
 }
+
+/** A score for display: "86" not "86.00", "33.5" not "33.50". */
+export function formatScore(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")
+}

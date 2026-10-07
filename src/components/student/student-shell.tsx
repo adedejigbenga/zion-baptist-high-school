@@ -13,16 +13,16 @@ import { StudentSidebarProfile, StudentSidebarProfileSkeleton } from "@/componen
  */
 function StudentShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-dvh lg:flex">
+    <div className="min-h-dvh lg:flex print:block print:min-h-0">
       <a
         href="#main-content"
-        className="sr-only z-50 rounded-lg bg-card px-4 py-2 type-label text-primary shadow-md focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:outline-2 focus:outline-offset-2 focus:outline-ring"
+        className="sr-only z-50 rounded-lg bg-card px-4 py-2 type-label text-primary shadow-md print:hidden focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:outline-2 focus:outline-offset-2 focus:outline-ring"
       >
         Skip to main content
       </a>
 
       {/* Desktop sidebar */}
-      <aside className="hidden border-r border-sidebar-border bg-sidebar lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-72 lg:shrink-0 lg:flex-col lg:gap-6 lg:overflow-y-auto lg:p-5">
+      <aside className="hidden print:hidden border-r border-sidebar-border bg-sidebar lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-72 lg:shrink-0 lg:flex-col lg:gap-6 lg:overflow-y-auto lg:p-5">
         <BrandLogo className="self-start" />
         <p className="type-caption font-semibold tracking-[0.14em] text-primary uppercase">Student Portal</p>
         <React.Suspense fallback={<StudentSidebarProfileSkeleton />}>
@@ -31,9 +31,9 @@ function StudentShell({ children }: { children: React.ReactNode }) {
         <StudentNav />
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col print:block">
         {/* Mobile / tablet header */}
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-border bg-card/95 px-(--page-gutter) backdrop-blur lg:hidden">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-border bg-card/95 px-(--page-gutter) backdrop-blur lg:hidden print:hidden">
           <BrandLogo />
           <StudentMobileNav>
             <React.Suspense fallback={<StudentSidebarProfileSkeleton />}>
@@ -42,8 +42,8 @@ function StudentShell({ children }: { children: React.ReactNode }) {
           </StudentMobileNav>
         </header>
 
-        <main id="main-content" tabIndex={-1} className="flex-1 px-(--page-gutter) py-6 outline-none md:py-8 lg:px-10 lg:py-10">
-          <div className="mx-auto w-full max-w-5xl">
+        <main id="main-content" tabIndex={-1} className="flex-1 px-(--page-gutter) py-6 outline-none md:py-8 lg:px-10 lg:py-10 print:p-0">
+          <div className="mx-auto w-full max-w-5xl print:max-w-none">
             <React.Suspense fallback={<DashboardSkeleton />}>{children}</React.Suspense>
           </div>
         </main>

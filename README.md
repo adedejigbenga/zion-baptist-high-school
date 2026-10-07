@@ -21,7 +21,7 @@ A web application for Zion Baptist High School.
 
 ## Current Development Stage
 
-**Step 10 - Student dashboard.** The public site, the portal gateway, a local PostgreSQL database, authentication and the real **student dashboard** (`/portal/student`: greeting, summary, result status, quick actions, announcements) are built on the design system ([DESIGN-SYSTEM.md](DESIGN-SYSTEM.md), [ARCHITECTURE.md](ARCHITECTURE.md)). The student's detailed result page, profile and announcements pages, and the teacher and admin dashboards are not built yet (temporary placeholders exist). Hero image, logo mark, news items and contact details are temporary placeholders (see `src/lib/site-config.ts` and `src/lib/demo/`).
+**Step 11 - Student result viewer.** The public site, the portal gateway, a local PostgreSQL database, authentication, the student dashboard and the **student result viewer** (`/portal/student/results`: term selector, printable result sheet, "Result Upload in Progress" for anything unpublished) are built on the design system ([DESIGN-SYSTEM.md](DESIGN-SYSTEM.md), [ARCHITECTURE.md](ARCHITECTURE.md)). The student profile and announcements pages, the teacher and admin dashboards, and result entry/publishing are not built yet. Hero image, logo mark, news items and contact details are temporary placeholders (see `src/lib/site-config.ts` and `src/lib/demo/`).
 
 ## Local Database Setup
 
@@ -94,6 +94,12 @@ Shared demo password: `ZionDemo#2026`
 | `ZBHS/2026/004` | Esther Cole | SS 1 | "Result Upload in Progress" (result DRAFT) |
 | `ZBHS/2026/005` | David Peter | SS 1 | "No result yet" |
 | `ZBHS/2026/006` | Ruth Samuel | SS 3 | "No result yet" |
+
+**Result viewer demo data.** Open **My Results** after signing in. Daniel (`ZBHS/2026/001`) opens a published First Term result.
+Grace, Esther and Samuel see "Result Upload in Progress" for this term. Samuel (`ZBHS/2026/003`) and Esther (`ZBHS/2026/004`) also
+have **last year's** results (session 2025/2026, in the classes they were in then): use the Term selector to open the published
+Third Term, or to see that Samuel's Second Term is still unpublished. David and Ruth have nothing published yet.
+Use **Print Result** (or Ctrl+P) to see the A4 print layout.
 
 The seed also adds 8 fictional announcements (some school-wide, some for one class, and three that must stay hidden:
 unpublished, expired and scheduled for the future), so each student sees a slightly different list.
