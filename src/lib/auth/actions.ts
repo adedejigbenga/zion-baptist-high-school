@@ -43,7 +43,14 @@ export async function signIn(portal: string, _previous: SignInState, formData: F
     return { error: message ?? GENERIC_ERROR, loginId: typedLoginId }
   }
 
-  const result = await authenticate({ ...parsed.data, ip: await clientIp() })
+  let result: Awaited<ReturnType<typeof authenticate>>
+  try {
+    result = await authenticate({ ...parsed.data, ip: await clientIp() })
+  } catch (error) {
+    // Database down or misconfigured: show a calm message instead of a crash page. Log only the error type/message.
+    console.error("Sign-in failed unexpectedly:", error instanceof Error ? error.message : "unknown error")
+    return { loginId: parsed.data.loginId, error: "Sign-in is temporarily unavailable. Please try again later." }
+  }
 
   if (!result.ok) {
     return {

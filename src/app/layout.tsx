@@ -15,6 +15,8 @@ export const metadata: Metadata = {
     template: "%s | Zion Baptist High School",
   },
   description: "Zion Baptist High School",
+  // Placeholder content: hidden from search engines until NEXT_PUBLIC_ALLOW_INDEXING=true (see app/robots.ts).
+  robots: process.env.NEXT_PUBLIC_ALLOW_INDEXING === "true" ? undefined : { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
