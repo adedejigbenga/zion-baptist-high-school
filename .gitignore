@@ -42,3 +42,5 @@ next-env.d.ts
 
 # keep the placeholder env template tracked
 !.env.example
+
+/src/generated/prisma
