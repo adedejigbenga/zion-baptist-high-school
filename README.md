@@ -21,7 +21,7 @@ A web application for Zion Baptist High School.
 
 ## Current Development Stage
 
-**Step 2 - Architecture planning.** The project foundation is in place and the architecture is documented in [ARCHITECTURE.md](ARCHITECTURE.md). Prisma is configured (`prisma.config.ts`, `prisma/schema.prisma`) but contains no models yet. No pages, authentication or database schema exist yet.
+**Step 3 - Design system.** The foundation and architecture ([ARCHITECTURE.md](ARCHITECTURE.md)) are in place, and the visual design system ([DESIGN-SYSTEM.md](DESIGN-SYSTEM.md)) is established: colour/typography/spacing tokens and base UI components. Prisma is configured but has no models. No pages, authentication or database schema exist yet.
 
 ## Getting Started
 
@@ -32,4 +32,5 @@ npm run dev
 ```
 
 Open http://localhost:3000.
+
 
