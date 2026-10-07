@@ -21,6 +21,22 @@ try {
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set.")
 if (process.env.NODE_ENV === "production") throw new Error("Refusing to seed demo data in production.")
 
+// Safety: demo data and the shared demo password must never reach a shared or hosted database.
+// NODE_ENV alone is not enough (it is usually unset on a developer machine), so also require a local host.
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"])
+let databaseHost: string
+try {
+  databaseHost = new URL(process.env.DATABASE_URL).hostname.toLowerCase()
+} catch {
+  throw new Error("DATABASE_URL is not a valid connection string.")
+}
+if (!LOCAL_HOSTS.has(databaseHost)) {
+  throw new Error(
+    "Refusing to seed: DATABASE_URL does not point at this machine (localhost). " +
+      "The development seed only runs against a local database.",
+  )
+}
+
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) })
 
 /** DEVELOPMENT ONLY. Documented in README.md. Never use anywhere real. */
