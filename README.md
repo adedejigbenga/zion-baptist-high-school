@@ -89,6 +89,37 @@ Database tests use a separate `zion_baptist_high_school_test` database. It is cr
 first time (the `zion_app` role needs `CREATEDB`), and the test helpers refuse to run against any database whose name
 does not end in `_test`, so the development data is never touched.
 
+## Deployment (Vercel)
+
+- **Live site:** https://zion-baptist-high-school.vercel.app (Vercel project ).
+- **Deploy from this machine:**  (you must be signed in to Vercel; {
+  "status": "error",
+  "reason": "unknown_command",
+  "message": "Unknown command "whoami\". Did you mean "whoami"?",
+  "hint": "Use the suggested command after replacing any placeholders with the intended values.",
+  "next": [
+    {
+      "command": "vercel whoami",
+      "when": "Run the corrected command; replace any placeholders first"
+    }
+  ],
+  "cliVersion": "62.7.0",
+  "invocationId": "e11cb2e5-3fb5-43f5-8a79-a2796cf560c8"
+}).
+- **Builds need no database.** Vercel runs Unknown command: "install"
+
+
+Did you mean one of these?
+  npm install # Install a package
+  npm uninstall # Remove a package
+To see a list of supported npm commands, run:
+  npm help (which runs  via ) and .
+- **Sign-in needs a hosted PostgreSQL database.** Until  is set in the Vercel project settings, the live portal shows
+  "Sign-in is temporarily unavailable". The database must also have the migrations applied ().
+- **Search engines are blocked** (robots.txt and a noindex tag) while the site has placeholder content. Set
+   in the Vercel settings when the school approves the content.
+- **Automatic deploys on push** are not set up yet: the Vercel GitHub app must be authorised for the repository first.
+
 ## Getting Started
 
 ```bash
