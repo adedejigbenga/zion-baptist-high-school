@@ -1,8 +1,8 @@
 # Zion Baptist High School - Architecture
 
-> Status: **design document.** The database schema (section 6) is implemented and validated in
-> `prisma/schema.prisma`; no database or migration exists yet. Everything else described as "future"
-> (authentication, authorization, services, result pages) is not implemented.
+> Status: **design document.** The database (section 6) is implemented: `prisma/schema.prisma`, the migration
+> `init_school_portal` applied to a local PostgreSQL 17 database, and a development seed. Everything else described as
+> "future" (authentication, authorization, services, result pages) is not implemented.
 
 Stack: Next.js 16 (App Router, Cache Components enabled), TypeScript, Tailwind CSS 4, shadcn/ui,
 PostgreSQL + Prisma 7.10, Zod 4. Deployment target: Vercel, with PostgreSQL hosted separately.
@@ -253,8 +253,8 @@ separate modules (`lib/auth/session` vs `lib/auth/policies`).
 
 ## 6. Database design (final schema, `prisma/schema.prisma`)
 
-The schema is implemented, validated and generates a client; **no database exists yet** and no migration has been
-created. Conventions: `cuid` string IDs, `createdAt`/`updatedAt` on mutable tables, enums for closed sets, `Decimal`
+The schema is implemented, migrated (`prisma/migrations/20261007155802_init_school_portal`) and seeded with fictional
+development data (`prisma/seed.ts`). Conventions: `cuid` string IDs, `createdAt`/`updatedAt` on mutable tables, enums for closed sets, `Decimal`
 for scores, and **no hard-coded academic values** (sessions, classes, subjects, components and grade bands are rows).
 Table and model names are the same (PascalCase). 21 models, 5 enums.
 
@@ -337,14 +337,15 @@ Relation fields use Prisma's `...Id` naming for the scalar and the plain name fo
 
 ### 6.5 Rules enforced outside Prisma
 
-Prisma cannot express these, so they are enforced in the service layer now, and by raw SQL in the first migration where
-noted (they are also listed at the bottom of `schema.prisma`):
+Prisma cannot express these. Where PostgreSQL can enforce them they are now **in the database**, as hand-written SQL
+appended to the first migration (marked in the file; keep it if the migration is ever regenerated). The rest stay in the
+service layer. They are also listed at the bottom of `schema.prisma`:
 
 1. `User.role` matches the profile that exists (service, one transaction).
-2. At most one `isCurrent` session, one `isCurrent` term and one `isDefault` grading scheme (partial unique indexes in the first migration).
-3. `SchoolClass (name, section)`: PostgreSQL treats NULL sections as distinct, so classes without a section need a partial unique index on `name WHERE section IS NULL` (first migration).
-4. Score ranges (0 <= score <= maxScore), `minScore <= maxScore` on bands, `startDate < endDate` (Zod + service; CHECK constraints can be added in a migration).
-5. A scheme's component weights add up to 100 and its grade bands neither overlap nor leave gaps (service).
+2. At most one `isCurrent` session, one `isCurrent` term and one `isDefault` grading scheme. **In the database:** partial unique indexes `AcademicSession_only_one_current`, `Term_only_one_current`, `GradingScheme_only_one_default`. (Switching the current session or term therefore means clearing the old flag in the same transaction.)
+3. `SchoolClass (name, section)`: PostgreSQL treats NULL sections as distinct, so classes without a section need a partial unique index on `name WHERE section IS NULL`. **In the database:** `SchoolClass_name_when_no_section`.
+4. Score ranges, band ranges and dates. **In the database:** `ResultEntryScore.score >= 0` (CHECK) and `score <= component.maxScore` (trigger `ResultEntryScore_score_max_trigger`, because it needs the component row); `GradeBand` `0 <= minScore <= maxScore`; `AssessmentComponent` `maxScore > 0` and `0 < weight <= 100`; `startDate < endDate` on sessions and terms. Zod still validates the same rules for friendly error messages.
+5. **In the database:** grade bands of one scheme cannot overlap (exclusion constraint `GradeBand_no_overlap`, uses the `btree_gist` extension; inclusive ranges). **In the service layer:** a scheme's component weights add up to 100 and grade bands leave no gaps (a sum across rows cannot be checked row by row without blocking one-at-a-time inserts).
 6. A result's class equals the student's enrolment class for that session; an entry's subject is offered by that class
    (`ClassSubject`); a teacher writes only subjects they are assigned (`TeacherAssignment`) (service + policies).
 7. Published results are immutable: unpublish (recorded) -> edit -> republish.
@@ -388,12 +389,16 @@ later as a non-breaking migration if needed.
   "who published this result and when"; `AuditLog` covers everything else. Entries survive removal of the user
   (`SET NULL`) and must never contain passwords, tokens or full result data.
 
-### 6.8 Seed readiness
+### 6.8 Development seed (`prisma/seed.ts`)
 
-The schema supports a development seed of one admin, two teachers, several students, classes, subjects, one session with
-three terms, class-subject offerings, teacher assignments, a grading scheme with CA and Exam components, and grade bands.
-No seed script exists yet. When it is written it must use obviously fake data and generate throw-away passwords at run
-time (never committed).
+Fictional data only, safe to re-run (verified: identical row counts and unchanged password hashes on a second run).
+Contents: 1 admin, 3 teachers (`TCH001`-`TCH003`), 6 students (`ZBHS/2026/001`-`006`, who log in with their admission
+number), session 2026/2027 with FIRST (current), SECOND and THIRD terms, classes JSS 1 - SS 3, 8 subjects, 36 class-subject
+offerings, 12 teacher assignments, 6 enrolments, the grading scheme "Standard Secondary School Grading" (CA 40 / Exam 60;
+bands A 70-100, B 60-69.99, C 50-59.99, D 40-49.99, F 0-39.99), and 4 First Term results: 1 PUBLISHED (with its
+`ResultPublication` row), 1 SUBMITTED, 2 DRAFT, with 13 entries and 26 component scores whose totals, grades and remarks
+are computed from the grading rows in the database. All demo accounts share one documented DEVELOPMENT-ONLY password,
+stored only as an Argon2id hash. The seed never runs when `NODE_ENV=production`.
 
 ---
 
@@ -513,9 +518,23 @@ files. Additional variables (email provider, rate-limit store) are added when th
 ## 13. Prisma 7.10 conventions in this project
 
 - `prisma` and `@prisma/client` are both `7.10.0` (kept aligned; do not upgrade one alone).
-- `prisma/schema.prisma` holds the full schema (section 6): 21 models, 5 enums. It validates and generates without a
-  database (`prisma validate`, `prisma generate`); `prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script`
-  renders the SQL offline for review.
+- `prisma/schema.prisma` holds the full schema (section 6): 21 models, 5 enums. `prisma validate` and `prisma generate`
+  need no database.
+- **Migrations:** `prisma/migrations/20261007155802_init_school_portal` (21 tables, 5 enums, 32 foreign keys, plus the
+  hand-written rules from 6.5: 4 partial unique indexes, 6 CHECK constraints, 1 exclusion constraint, 1 trigger). Prisma
+  does not see those extras, so `prisma migrate diff` reports no drift, but a regenerated migration would lose them.
+  Add future rules the same way (a new migration with plain SQL).
+- **Runtime client:** `src/lib/db.ts` is the only place the client is created: `PrismaClient` from the generated
+  output, with the `@prisma/adapter-pg` driver adapter (`pg` pool, max 5) and a `globalThis` singleton so Next.js hot
+  reload does not open new pools. It starts with `import "server-only"` and is imported only by the data layer.
+- **Seed:** `prisma/seed.ts` (run with `npx prisma db seed`, configured in `prisma.config.ts` as `tsx prisma/seed.ts`).
+  It is idempotent (upserts by natural keys), refuses to run when `NODE_ENV=production`, and uses its own client
+  because `db.ts` is server-only.
+- **Password hashing:** `@node-rs/argon2` (Argon2id, 19 MiB, 2 passes, 1 lane). The seed hashes the shared development
+  password; nothing in the application logs in yet.
+- **Local development database:** PostgreSQL 17 on `localhost:5432`, database `zion_baptist_high_school`, owned by a
+  limited role `zion_app` (with `CREATEDB` for Prisma's shadow database). The connection string lives only in
+  `.env.local` (git-ignored); see README "Local Database Setup".
   - Generator is `prisma-client` (not the legacy `prisma-client-js`) with `output = "../src/generated/prisma"`.
     Import the client from `@/generated/prisma/client`, not from `@prisma/client`. The output folder is git-ignored.
   - The datasource block has **no `url`**: in Prisma 7 the connection URL lives in `prisma.config.ts`, not the schema.
