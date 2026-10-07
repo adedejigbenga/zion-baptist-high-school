@@ -21,7 +21,7 @@ A web application for Zion Baptist High School.
 
 ## Current Development Stage
 
-**Step 8 - Authentication.** The public homepage, the portal gateway and a local PostgreSQL database (21-model Prisma schema, migrations, demo seed) are in place ([ARCHITECTURE.md](ARCHITECTURE.md), [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md)). Students, teachers and administrators can now sign in and out with database-backed sessions; after signing in each role reaches a temporary landing page. The dashboards, result pages and any page that reads academic data are not built yet. Hero image, logo mark, news items and contact details are temporary placeholders (see `src/lib/site-config.ts` and `src/lib/demo/`).
+**Step 10 - Student dashboard.** The public site, the portal gateway, a local PostgreSQL database, authentication and the real **student dashboard** (`/portal/student`: greeting, summary, result status, quick actions, announcements) are built on the design system ([DESIGN-SYSTEM.md](DESIGN-SYSTEM.md), [ARCHITECTURE.md](ARCHITECTURE.md)). The student's detailed result page, profile and announcements pages, and the teacher and admin dashboards are not built yet (temporary placeholders exist). Hero image, logo mark, news items and contact details are temporary placeholders (see `src/lib/site-config.ts` and `src/lib/demo/`).
 
 ## Local Database Setup
 
@@ -81,8 +81,22 @@ Shared demo password: `ZionDemo#2026`
 2. Open http://localhost:3000/portal and choose the portal that matches the account, or go straight to
    `/portal/student/login`, `/portal/teacher/login` or `/portal/admin/login`.
 3. Enter the **Login ID** and the shared demo password. You land on a temporary welcome page for that role
-   (`/portal/student`, `/portal/teacher`, `/portal/admin`). The real dashboards are not built yet.
+   (`/portal/student` is now the real student dashboard; the teacher and admin pages are still temporary).
 4. **Log out** with the Logout button in the page header. This revokes the session in the database and removes the cookie.
+
+**Student dashboard states** (DEVELOPMENT ONLY demo data; all use the shared demo password):
+
+| Login ID | Student | Class | What the dashboard shows |
+|---|---|---|---|
+| `ZBHS/2026/001` | Daniel Ade | JSS 1 | "Your result is available" + **Check Result** |
+| `ZBHS/2026/002` | Grace Bello | JSS 1 | "Result Upload in Progress" (result SUBMITTED) |
+| `ZBHS/2026/003` | Samuel James | JSS 2 | "Result Upload in Progress" (result DRAFT) |
+| `ZBHS/2026/004` | Esther Cole | SS 1 | "Result Upload in Progress" (result DRAFT) |
+| `ZBHS/2026/005` | David Peter | SS 1 | "No result yet" |
+| `ZBHS/2026/006` | Ruth Samuel | SS 3 | "No result yet" |
+
+The seed also adds 8 fictional announcements (some school-wide, some for one class, and three that must stay hidden:
+unpublished, expired and scheduled for the future), so each student sees a slightly different list.
 
 How to test each role (DEVELOPMENT ONLY — NEVER USE IN PRODUCTION):
 

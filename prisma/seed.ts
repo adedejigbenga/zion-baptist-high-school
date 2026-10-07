@@ -159,7 +159,61 @@ const DEMO_RESULTS: {
   },
 ]
 
-const PUBLISHED_AT = new Date("2026-12-19T10:00:00.000Z")
+const PUBLISHED_AT = new Date("2026-10-02T10:00:00.000Z")
+
+/**
+ * Demo announcements. Some must be visible to students and some deliberately must NOT be (unpublished, expired,
+ * scheduled for the future, or aimed at another class), so the filtering rules can be checked against real data.
+ */
+const ANNOUNCEMENTS: {
+  title: string
+  content: string
+  isPublished: boolean
+  publishedAt: string | null
+  expiresAt: string | null
+  className: string | null
+}[] = [
+  {
+    title: "Welcome to the 2026/2027 Academic Session",
+    content: "We welcome all students and parents to the new session. Classes for the First Term are now in progress.",
+    isPublished: true, publishedAt: "2026-09-10T08:00:00.000Z", expiresAt: null, className: null,
+  },
+  {
+    title: "First Term Examination Timetable",
+    content: "The First Term examination timetable will be shared with every class before the examination period begins.",
+    isPublished: true, publishedAt: "2026-09-25T08:00:00.000Z", expiresAt: null, className: null,
+  },
+  {
+    title: "JSS 1 Parents' Meeting",
+    content: "Parents and guardians of JSS 1 students are invited to a short meeting with the class teachers.",
+    isPublished: true, publishedAt: "2026-09-18T08:00:00.000Z", expiresAt: null, className: "JSS 1",
+  },
+  {
+    title: "SS 1 Study Visit",
+    content: "SS 1 students will take part in a supervised study visit. Details will be given in class.",
+    isPublished: true, publishedAt: "2026-09-20T08:00:00.000Z", expiresAt: null, className: "SS 1",
+  },
+  {
+    title: "SS 3 Final Year Briefing",
+    content: "A briefing for final-year students on the coming examinations.",
+    isPublished: true, publishedAt: "2026-09-22T08:00:00.000Z", expiresAt: null, className: "SS 3",
+  },
+  {
+    title: "HIDDEN (unpublished): Staff Meeting",
+    content: "This is a draft and must not be shown to students.",
+    isPublished: false, publishedAt: null, expiresAt: null, className: null,
+  },
+  {
+    title: "HIDDEN (expired): Registration Deadline",
+    content: "This announcement has expired and must not be shown to students.",
+    isPublished: true, publishedAt: "2026-08-01T08:00:00.000Z", expiresAt: "2026-09-30T00:00:00.000Z", className: null,
+  },
+  {
+    title: "HIDDEN (scheduled): Future Notice",
+    content: "This is scheduled for the future and must not be shown yet.",
+    isPublished: true, publishedAt: "2099-01-01T08:00:00.000Z", expiresAt: null, className: null,
+  },
+]
 
 // ---------------------------------------------------------------------------------------------------
 // Helpers
@@ -374,12 +428,30 @@ async function main() {
     // Publication history (one PUBLISHED row for the published result, created once)
     if (published) {
       const already = await prisma.resultPublication.findFirst({ where: { resultId: result.id, action: "PUBLISHED" } })
-      if (!already) {
+      if (already) {
+        await prisma.resultPublication.update({ where: { id: already.id }, data: { publishedAt: PUBLISHED_AT, publishedById: adminUser.id } })
+      } else {
         await prisma.resultPublication.create({
           data: { resultId: result.id, publishedById: adminUser.id, publishedAt: PUBLISHED_AT, action: "PUBLISHED" },
         })
       }
     }
+  }
+
+  // Announcements (no unique key exists, so look each one up by title)
+  for (const a of ANNOUNCEMENTS) {
+    const targetClassId = a.className ? must(classes, a.className, "class").id : null
+    const data = {
+      content: a.content,
+      isPublished: a.isPublished,
+      publishedAt: a.publishedAt ? new Date(a.publishedAt) : null,
+      expiresAt: a.expiresAt ? new Date(a.expiresAt) : null,
+      targetClassId,
+      createdById: adminUser.id,
+    }
+    const existing = await prisma.announcement.findFirst({ where: { title: a.title } })
+    if (existing) await prisma.announcement.update({ where: { id: existing.id }, data })
+    else await prisma.announcement.create({ data: { title: a.title, ...data } })
   }
 
   // Summary (counts only; no personal data, no secrets)
@@ -402,6 +474,7 @@ async function main() {
     resultEntries: await prisma.resultEntry.count(),
     resultEntryScores: await prisma.resultEntryScore.count(),
     resultPublications: await prisma.resultPublication.count(),
+    announcements: await prisma.announcement.count(),
   }
   console.log("Seed complete:", counts)
 }

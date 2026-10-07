@@ -7,11 +7,12 @@ function assertTestDatabase() {
   if (!name.endsWith("_test")) throw new Error(`Refusing to modify "${name}": it is not a test database.`)
 }
 
-/** Empties every table the tests use. */
+/** Empties every table (cascading from the parent tables). Only ever runs against the *_test database. */
 export async function resetDatabase() {
   assertTestDatabase()
   await db.$executeRawUnsafe(
-    'TRUNCATE TABLE "AuditLog", "Session", "Student", "Teacher", "Admin", "User" RESTART IDENTITY CASCADE',
+    // Truncating the parent tables cascades to everything that references them.
+    'TRUNCATE TABLE "User", "AcademicSession", "SchoolClass", "Subject", "GradingScheme", "AuditLog" RESTART IDENTITY CASCADE',
   )
 }
 

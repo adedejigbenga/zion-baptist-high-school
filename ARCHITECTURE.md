@@ -1,8 +1,8 @@
 # Zion Baptist High School - Architecture
 
-> Status: **design document.** Authentication (section 4) and the database (section 6) are implemented: `prisma/schema.prisma`, the migration
-> `init_school_portal` applied to a local PostgreSQL 17 database, and a development seed. Role-based access exists for the
-> three portal landing pages only; the data layer, result pages and dashboards described below are not built yet.
+> Status: **design document.** Authentication (section 4), the database (section 6) and the student dashboard (section 7.1) are implemented: `prisma/schema.prisma`, the migration
+> `init_school_portal` applied to a local PostgreSQL 17 database, and a development seed. Role-based access exists for all
+> portal areas. The teacher and admin dashboards, the detailed result page and result entry are not built yet.
 
 Stack: Next.js 16 (App Router, Cache Components enabled), TypeScript, Tailwind CSS 4, shadcn/ui,
 PostgreSQL + Prisma 7.10, Zod 4. Deployment target: Vercel, with PostgreSQL hosted separately.
@@ -459,8 +459,9 @@ number), session 2026/2027 with FIRST (current), SECOND and THIRD terms, classes
 offerings, 12 teacher assignments, 6 enrolments, the grading scheme "Standard Secondary School Grading" (CA 40 / Exam 60;
 bands A 70-100, B 60-69.99, C 50-59.99, D 40-49.99, F 0-39.99), and 4 First Term results: 1 PUBLISHED (with its
 `ResultPublication` row), 1 SUBMITTED, 2 DRAFT, with 13 entries and 26 component scores whose totals, grades and remarks
-are computed from the grading rows in the database. All demo accounts share one documented DEVELOPMENT-ONLY password,
-stored only as an Argon2id hash. The seed never runs when `NODE_ENV=production`.
+are computed from the grading rows in the database, plus 8 announcements (5 visible to the right audiences and 3 that must stay hidden:
+unpublished, expired, and scheduled for the future) used to check the student dashboard's filtering. All demo accounts share one documented DEVELOPMENT-ONLY password,
+stored only as an Argon2id hash. The seed never runs when `NODE_ENV=production` or against a non-local database.
 
 ---
 
@@ -495,6 +496,49 @@ Rules:
 - **Concurrent edits:** `Result.updatedAt` is compared on save (optimistic concurrency; a `version` column can be added later) to avoid two people silently
   overwriting each other.
 - **Admin override:** admins may enter or correct entries directly; those writes are audited the same way.
+
+### 7.1 Student dashboard (implemented: `/portal/student`)
+
+**Identity.** The student is always the signed-in one. `getStudentDashboard()` and `getStudentProfileSummary()`
+(`src/lib/services/student.ts`) take **no student ID**: they call `requireRole("STUDENT")` (database-checked session), read
+`studentId` from that validated session, and pass it to an internal loader (`student-dashboard.ts`) that pages never import.
+There is no student ID in any URL; `/portal/student/<anything>` other than the real sub-pages is a 404, and query strings
+such as `?studentId=...` are ignored (all verified in the browser).
+
+**Result privacy (the key rule).** A student must never receive an individual score, grade, total or remark before the
+whole result is PUBLISHED. The dashboard goes further: it never receives them at all, even when published (the detailed
+result page is a later step). Three layers enforce this:
+1. The result query selects only `status` and `publishedAt`: it never touches entries, scores, grades or subjects.
+2. The return type (`StudentResultStatus` in `src/types/student.ts`) has no field that could carry them; the result card
+   component only accepts that type.
+3. Tests: unit tests give DRAFT, SUBMITTED and PUBLISHED results distinctive secret values and assert none appears in the
+   returned object; browser tests scan the page HTML and every server response for subject names, score/grade/remark
+   keys and other students' names or admission numbers.
+
+| Database state (current term) | `result.state` | What the student sees |
+|---|---|---|
+| No current session/term | `NO_TERM` | "No active term" |
+| No active enrolment this session | `NO_ENROLLMENT` | "No class for this session" |
+| No result row | `NOT_STARTED` | "No result yet" |
+| DRAFT or SUBMITTED | `IN_PROGRESS` | "Result Upload in Progress" (no button) |
+| PUBLISHED | `PUBLISHED` | "Your result is available" + **Check Result** |
+
+Only the **current** term counts: a published result from another term does not make the card say "available". The
+"Check Result" quick action is a link only for `PUBLISHED`; otherwise it is plain, explained text. (Showing "In progress"
+versus "No result yet" reveals that a teacher has started a result, but nothing about its content.)
+
+**Announcements.** Up to 5, newest first: `isPublished`, `publishedAt` empty or not in the future, `expiresAt` empty or in the
+future, and school-wide or addressed to the student's class in the current session. Content is shown as shortened plain text.
+
+**Dates and greeting.** "Good morning / afternoon / evening" and displayed dates use the school's time zone
+(`siteConfig.timeZone`, Africa/Lagos), never the server's clock (Vercel runs in UTC). Which session and term are current,
+the class, and the names all come from PostgreSQL; nothing is hard-coded.
+
+**Layout and rendering.** Sidebar from `lg`; below that a compact header with a menu sheet. The dashboard is a single column
+until `xl` (1280px), then two columns. The student layout is a frame only (it protects nothing); each page and data function
+checks the session. With Cache Components, the session-reading parts are under `<Suspense>`: the static frame and skeletons
+are prerendered and the user's data streams in (route type "Partial Prerender"). `/portal/student/results`, `/profile` and
+`/announcements` are temporary "coming soon" pages that enforce the role and show no data, so the sidebar never leads to a 404.
 
 ---
 

@@ -11,6 +11,9 @@ export const siteConfig = {
   description:
     "Zion Baptist High School is a Christian secondary school committed to sound learning, good character and a caring school community.",
 
+  /** The school's time zone: used for greetings ("Good morning") and for showing dates, whatever the server's clock says. */
+  timeZone: "Africa/Lagos",
+
   /** Where "Visit the Portal" goes. The portal itself is built in a later step. */
   portalHref: "/portal",
 
