@@ -26,7 +26,7 @@ function PasswordInput({
         aria-label={visible ? "Hide password" : "Show password"}
         aria-pressed={visible}
         disabled={props.disabled}
-        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50"
+        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50"
       >
         {visible ? (
           <EyeOffIcon className="size-4" aria-hidden="true" />

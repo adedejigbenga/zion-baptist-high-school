@@ -205,6 +205,7 @@ Component: [button.tsx](src/components/ui/button.tsx). Props: `variant`, `size`,
 | `ghost` | Transparent; fill on hover | Toolbars, table row actions, icon buttons |
 | `destructive` | Solid red, white text | Delete, suspend, unpublish (always confirm) |
 | `success` | Solid green, white text | Positive confirmation (e.g. Publish) |
+| `inverse` | White, deep-purple text | **Only** on brand-gradient / dark purple surfaces (e.g. the portal call-to-action band) |
 | `link` | Underlined text | Low-emphasis action inside text |
 
 Sizes: `xs`, `sm`, `default` (40px), `lg` (48px), `icon`, `icon-xs`, `icon-sm`, `icon-lg`.
@@ -217,6 +218,10 @@ States:
 - **Focus-visible:** 2px solid `ring` outline with 2px offset (destructive and success use their own colour). Never remove it.
 - **Disabled:** 50% opacity, not clickable. Use sparingly; prefer explaining why an action is unavailable.
 - **Loading:** `loading` shows a spinner before the label, sets `aria-busy`, and blocks repeat clicks. Keep the label text.
+
+**Focus ring gotcha (Tailwind v4):** `outline-none` / `outline-hidden` set `outline-style: none`, which stops `focus-visible:outline-2` from drawing. Never combine them on an element that relies on a focus-visible outline; just omit them.
+
+**Link-styled buttons:** style a Next.js `<Link>` with `buttonVariants()` (do not pass `hidden` through its `className`: it is merged away by `inline-flex`; hide with a wrapper element instead).
 
 A **button** performs an action (fills, borders, `<button>`); a **link** navigates (underlined text, `<a>`). Use
 `buttonVariants()` to style a Next.js `<Link>` like a button when navigation should look like a call-to-action.

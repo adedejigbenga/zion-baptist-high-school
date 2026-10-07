@@ -11,28 +11,31 @@ import { Loader2Icon } from "lucide-react"
  *   ghost       = Ghost     (toolbar / low emphasis)
  *   destructive = Destructive (delete, suspend, unpublish)
  *   success     = Success   (confirming positive actions, e.g. Publish)
+ *   inverse     = Inverse   (white button for use ON brand-gradient / dark purple surfaces only)
  *   link        = text link styled as an action
  * Hover/active darken via color-mix so no extra tokens are needed.
  * Touch devices (pointer: coarse) get 44px-high targets automatically.
  */
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent text-sm font-semibold whitespace-nowrap transition-colors select-none outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-busy:cursor-progress [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border text-sm font-semibold whitespace-nowrap transition-colors select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-busy:cursor-progress [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-xs hover:bg-[color-mix(in_oklab,var(--primary),black_14%)] active:bg-[color-mix(in_oklab,var(--primary),black_26%)]",
+          "border-transparent bg-primary text-primary-foreground shadow-xs hover:bg-[color-mix(in_oklab,var(--primary),black_14%)] active:bg-[color-mix(in_oklab,var(--primary),black_26%)]",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklab,var(--secondary),var(--primary)_14%)] active:bg-[color-mix(in_oklab,var(--secondary),var(--primary)_24%)] aria-expanded:bg-[color-mix(in_oklab,var(--secondary),var(--primary)_14%)]",
+          "border-transparent bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklab,var(--secondary),var(--primary)_14%)] active:bg-[color-mix(in_oklab,var(--secondary),var(--primary)_24%)] aria-expanded:bg-[color-mix(in_oklab,var(--secondary),var(--primary)_14%)]",
         outline:
           "border-input bg-card text-foreground shadow-xs hover:bg-muted hover:border-primary/60 active:bg-secondary aria-expanded:bg-muted",
         ghost:
-          "text-foreground hover:bg-muted active:bg-secondary aria-expanded:bg-muted",
+          "border-transparent text-foreground hover:bg-muted active:bg-secondary aria-expanded:bg-muted",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-xs hover:bg-[color-mix(in_oklab,var(--destructive),black_14%)] active:bg-[color-mix(in_oklab,var(--destructive),black_26%)] focus-visible:outline-destructive",
+          "border-transparent bg-destructive text-destructive-foreground shadow-xs hover:bg-[color-mix(in_oklab,var(--destructive),black_14%)] active:bg-[color-mix(in_oklab,var(--destructive),black_26%)] focus-visible:outline-destructive",
         success:
-          "bg-success text-success-foreground shadow-xs hover:bg-[color-mix(in_oklab,var(--success),black_14%)] active:bg-[color-mix(in_oklab,var(--success),black_26%)] focus-visible:outline-success",
-        link: "text-link h-auto rounded-sm px-0.5 font-medium",
+          "border-transparent bg-success text-success-foreground shadow-xs hover:bg-[color-mix(in_oklab,var(--success),black_14%)] active:bg-[color-mix(in_oklab,var(--success),black_26%)] focus-visible:outline-success",
+        inverse:
+          "border-transparent bg-card text-brand-900 shadow-xs hover:bg-brand-100 active:bg-brand-200 focus-visible:outline-white",
+        link: "border-transparent text-link h-auto rounded-sm px-0.5 font-medium",
       },
       size: {
         default:
