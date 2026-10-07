@@ -42,6 +42,13 @@ enum ResultStatus {
   PUBLISHED
 }
 
+/// A teacher's own subject entry: DRAFT (still being worked on) or SUBMITTED (finished and locked for the teacher,
+/// waiting for an administrator). Kept per entry because several teachers each add one subject to the same Result.
+enum EntryStatus {
+  DRAFT
+  SUBMITTED
+}
+
 enum PublicationAction {
   PUBLISHED
   UNPUBLISHED
@@ -365,15 +372,16 @@ model Result {
 
 /// A subject line within a result.
 model ResultEntry {
-  id         String   @id @default(cuid())
+  id         String      @id @default(cuid())
   resultId   String
   subjectId  String
   /// Computed from the scores and the scheme at save time (a stored snapshot).
-  totalScore Decimal? @db.Decimal(6, 2)
+  totalScore Decimal?    @db.Decimal(6, 2)
   grade      String?
   remark     String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  status     EntryStatus @default(DRAFT)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 
   result  Result             @relation(fields: [resultId], references: [id], onDelete: Cascade)
   subject Subject            @relation(fields: [subjectId], references: [id], onDelete: Restrict)

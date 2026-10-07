@@ -1,6 +1,6 @@
-import { PortalAppShell } from "@/components/portal/portal-app-shell"
+import { TeacherShell } from "@/components/teacher/teacher-shell"
 
-/** TEMPORARY frame until this role's real dashboard shell is built. Protects nothing by itself. */
-export default function RoleLayout({ children }: { children: React.ReactNode }) {
-  return <PortalAppShell>{children}</PortalAppShell>
+/** Frame for every teacher page. It protects nothing by itself: each page and data function checks the session. */
+export default function TeacherLayout({ children }: { children: React.ReactNode }) {
+  return <TeacherShell>{children}</TeacherShell>
 }

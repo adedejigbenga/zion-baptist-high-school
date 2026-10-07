@@ -355,6 +355,7 @@ GradingScheme --< GradeBand                 (A, B, C ... configurable)
 | `Gender` | MALE, FEMALE |
 | `TermName` | FIRST, SECOND, THIRD |
 | `ResultStatus` | DRAFT, SUBMITTED, PUBLISHED |
+| `EntryStatus` | DRAFT, SUBMITTED (per subject entry; see 7.3) |
 | `PublicationAction` | PUBLISHED, UNPUBLISHED |
 
 ### 6.3 Models
@@ -377,7 +378,7 @@ GradingScheme --< GradeBand                 (A, B, C ... configurable)
 | `AssessmentComponent` | A scored part (CA, Exam ...) | gradingSchemeId, name, shortName, maxScore, weight, sortOrder | unique (scheme, shortName), unique (scheme, name); index (scheme, sortOrder) |
 | `GradeBand` | Grade for a score range | gradingSchemeId, grade, minScore, maxScore, remark, sortOrder | unique (scheme, grade); index (scheme, minScore) |
 | `Result` | One student's result for one term | studentId, sessionId, termId, classId, gradingSchemeId, status, publishedAt?, publishedById? | unique (studentId, sessionId, termId); index (classId, termId, status), termId |
-| `ResultEntry` | Subject line of a result | resultId, subjectId, totalScore?, grade?, remark? | unique (resultId, subjectId); index subjectId |
+| `ResultEntry` | Subject line of a result | resultId, subjectId, status (EntryStatus), totalScore?, grade?, remark? | unique (resultId, subjectId); index subjectId |
 | `ResultEntryScore` | One component score | resultEntryId, assessmentComponentId, score | unique (resultEntryId, assessmentComponentId); index component |
 | `ResultPublication` | Publish/unpublish history | resultId, publishedById, publishedAt, action | index (resultId, publishedAt), publishedById |
 | `Announcement` | School-wide or class news | title, content, isPublished, publishedAt?, expiresAt?, createdById, targetClassId? | index (isPublished, publishedAt), targetClassId, createdById |
@@ -584,6 +585,48 @@ set A4 portrait with 14 mm margins, black-on-white with ruled table lines. It fi
 `buildResultSheet` take an explicit student ID and **authorize nothing**; the teacher and admin screens must call them only
 after their own authorization checks (assignment for teachers, role for admins). Student pages call them only through
 `student.ts`.
+
+### 7.3 Teacher portal (implemented: `/portal/teacher`, `/classes`, `/results`)
+
+**Who.** The teacher is whoever is signed in. `src/lib/services/teacher.ts` (public, session-bound) accepts **no teacher, class,
+subject or student ID**: `requireRole("TEACHER")` provides the teacher profile and everything is derived from it. The browser
+names a class only by key (`jss-1`) and a subject only by code (`MTH`); the server matches that pair against the teacher's own
+`TeacherAssignment` rows **for the current session**. A pair that is not an assignment (another teacher's, an unassigned
+subject, last session's, made-up keys, raw IDs) is refused with the same answer, shows no student data, and is audited as
+`TEACHER_ACCESS_DENIED`. Saving re-checks the assignment, then that every admission number in the request belongs to the
+class roster, then that every score name is a component of the grading scheme, then every value; the whole save is
+all-or-nothing. A student from another class in an otherwise valid request rejects the entire request.
+
+**Layers.** `teacher-workspace.ts` (reads) and `teacher-results.ts` (writes) are internal and authorize via the assignment lookup
+they perform; `teacher.ts` / `teacher-actions.ts` are the only entry points the UI uses. `validation/teacher.ts` parses the
+form (only `classKey`, `subjectCode`, `intent` and `score::<admission>::<component>` cells are read; anything else, such as a
+browser-supplied total or grade, is ignored).
+
+**Grading.** `src/lib/services/grading.ts` is pure and shared: the server recalculates every total, grade and remark from the raw
+scores using `AssessmentComponent` and `GradeBand` rows (no hardcoded CA/Exam or grade ranges); the browser reuses the same
+functions only for the live preview. Total = sum of score / maxScore x weight, rounded to 2 dp. A partly filled entry gets no
+total or grade. A total that falls in a gap between bands cannot be submitted.
+
+**Workflow and statuses.** Teachers have exactly two intents, `draft` and `submit`; there is no publish intent anywhere in the form,
+parser, action or service. Each subject line carries its own `EntryStatus`. Submitting requires every student of the class to
+have complete scores for that subject and locks the entries (`SUBMITTED`); a teacher cannot edit locked entries, entries under a
+different grading scheme, or any entry of a `PUBLISHED` result. A student's `Result` moves `DRAFT -> SUBMITTED` automatically only
+when **every** `ClassSubject` of the class is submitted (audited as `RESULT_READY_FOR_REVIEW`); `PUBLISHED` is reserved for the
+Admin portal (not built). The teacher UI says "awaiting administrative publication".
+
+**Students.** Nothing changes for students: they only ever receive data from `PUBLISHED` results, so draft, submitted and
+ready-for-review work stays behind "Result Upload in Progress" (verified in unit tests and in the browser).
+
+**Audit actions.** `TEACHER_SCORE_CHANGED` (per entry: class, subject, term, session, admission number, component from/to),
+`TEACHER_RESULT_DRAFT_SAVED`, `TEACHER_RESULT_SUBMITTED`, `RESULT_READY_FOR_REVIEW`, `TEACHER_ACCESS_DENIED`. No passwords,
+tokens or hashes are ever logged. Saving unchanged values writes nothing.
+
+**UI.** Teacher shell mirrors the student shell (sidebar from `lg`, sheet menu below). Result grid uses ARIA table roles so one set of
+inputs serves both layouts (stacked cards on phones, columns from `md`). Submit needs a confirmation dialog.
+
+**Testing.** `grading.test.ts` and `teacher.test.ts` (database tests: authorization, search, validation, workflow, audit, student
+invisibility); browser suite `teacher-e2e.mjs` covers dashboard numbers, URL tampering, role isolation, validation, live
+preview, draft, submit, student view and 320-1440px layouts.
 
 ---
 

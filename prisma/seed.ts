@@ -10,7 +10,7 @@
 import { hash } from "@node-rs/argon2"
 import { PrismaPg } from "@prisma/adapter-pg"
 
-import { Gender, PrismaClient, ResultStatus, Role, TermName } from "../src/generated/prisma/client"
+import { EntryStatus, Gender, PrismaClient, ResultStatus, Role, TermName } from "../src/generated/prisma/client"
 
 try {
   process.loadEnvFile(".env.local")
@@ -484,13 +484,15 @@ async function main() {
       },
     })
 
+    const entryStatus = r.status === ResultStatus.DRAFT ? EntryStatus.DRAFT : EntryStatus.SUBMITTED
     for (const [code, ca, exam] of r.scores) {
       const subjectId = must(subjects, code, "subject").id
       const { total, grade, remark } = gradeFor(new Map([["CA", ca], ["Exam", exam]]))
       const entry = await prisma.resultEntry.upsert({
         where: { resultId_subjectId: { resultId: result.id, subjectId } },
-        create: { resultId: result.id, subjectId, totalScore: total, grade, remark },
-        update: { totalScore: total, grade, remark },
+        // Entries of a submitted or published result were submitted by their teachers; draft results hold draft entries.
+        create: { resultId: result.id, subjectId, totalScore: total, grade, remark, status: entryStatus },
+        update: { totalScore: total, grade, remark, status: entryStatus },
       })
       for (const [shortName, score] of [["CA", ca], ["Exam", exam]] as const) {
         const assessmentComponentId = must(new Map(components.map((c) => [c.shortName, c])), shortName, "component").id

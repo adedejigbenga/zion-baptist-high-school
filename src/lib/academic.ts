@@ -24,3 +24,8 @@ export function termLabel(sessionName: string, termName: TermName): string {
 export function termKey(sessionName: string, termName: TermName): string {
   return `${sessionName.replace(/[^A-Za-z0-9]+/g, "-")}-${termName.toLowerCase()}`
 }
+
+/** A URL-safe reference to a class, e.g. "jss-1" or "jss-1-a". Built from the name, never from a database ID. */
+export function classKey(name: string, section: string | null): string {
+  return classLabel(name, section).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+}

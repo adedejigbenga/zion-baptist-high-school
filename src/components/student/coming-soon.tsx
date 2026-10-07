@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/
  * TEMPORARY content for student pages that are not built yet (results, profile, announcements), so the
  * navigation never leads to a 404. It shows no data of any kind.
  */
-function ComingSoon({ title }: { title: string }) {
+function ComingSoon({ title, backHref = "/portal/student" }: { title: string; backHref?: string }) {
   return (
     <div className="stack-page max-w-xl">
       <h1 className="type-page-title text-brand-950">{title}</h1>
@@ -23,7 +23,7 @@ function ComingSoon({ title }: { title: string }) {
         </CardContent>
       </Card>
       <Link
-        href="/portal/student"
+        href={backHref}
         className="inline-flex w-fit items-center gap-2 rounded-sm type-label text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
         <ArrowLeftIcon className="size-4" aria-hidden="true" />
