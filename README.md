@@ -21,7 +21,7 @@ A web application for Zion Baptist High School.
 
 ## Current Development Stage
 
-**Step 5 - Portal gateway (UI prototype).** The public homepage and a visual-only portal gateway (`/portal`, with prototype sign-in screens for students, teachers and admins) are built on the design system ([DESIGN-SYSTEM.md](DESIGN-SYSTEM.md)); architecture is in [ARCHITECTURE.md](ARCHITECTURE.md). There is no real authentication yet. Hero image, logo mark, news items and contact details are temporary placeholders (see `src/lib/site-config.ts` and `src/lib/demo/`). Prisma is configured but has no models.
+**Step 6 - Database schema.** The public homepage and a visual-only portal gateway are built on the design system ([DESIGN-SYSTEM.md](DESIGN-SYSTEM.md)). The Prisma database schema (21 models) is designed and validated ([ARCHITECTURE.md](ARCHITECTURE.md), section 6) but no database or migration exists yet. There is no real authentication. Hero image, logo mark, news items and contact details are temporary placeholders (see `src/lib/site-config.ts` and `src/lib/demo/`).
 
 ## Getting Started
 

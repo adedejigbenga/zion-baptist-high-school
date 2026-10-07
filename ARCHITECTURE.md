@@ -1,8 +1,8 @@
 # Zion Baptist High School - Architecture
 
-> Status: **planning document.** Nothing described here as "future" is implemented yet.
-> The Prisma schema is intentionally empty (no models). The conceptual model in section 6 is a proposal to be
-> reviewed before it becomes the real schema.
+> Status: **design document.** The database schema (section 6) is implemented and validated in
+> `prisma/schema.prisma`; no database or migration exists yet. Everything else described as "future"
+> (authentication, authorization, services, result pages) is not implemented.
 
 Stack: Next.js 16 (App Router, Cache Components enabled), TypeScript, Tailwind CSS 4, shadcn/ui,
 PostgreSQL + Prisma 7.10, Zod 4. Deployment target: Vercel, with PostgreSQL hosted separately.
@@ -182,11 +182,11 @@ an admin suspends an account or a user changes their password. Final choice to b
 
 **Intended flow**
 
-1. **Registration** (students and teachers): creates a `User` with `status = PENDING`. The role is determined by
+1. **Registration** (students and teachers): creates a `User` with `isActive = false` (pending approval; the schema has no separate PENDING state). The role is determined by
    *which registration form was used on the server*, never by a client-supplied field. Student registration
    additionally requires an admission number that links to an existing student record created by an admin; a
    registration alone grants no access to any academic data.
-2. **Approval:** an admin approves (`ACTIVE`) or rejects. Only `ACTIVE` users can sign in. `ADMIN` accounts are
+2. **Approval:** an admin approves (sets `isActive = true`) or rejects. Only active users can sign in. `ADMIN` accounts are
    never self-registered: the first is created by a seed/CLI step, later ones by existing admins.
 3. **Login:** Zod-validate, look up user, verify password hash (constant-time), reject non-`ACTIVE`, rate-limit,
    create a session, set the cookie (`HttpOnly`, `Secure`, `SameSite=Lax`, scoped `Path=/`), redirect by role.
@@ -251,131 +251,149 @@ separate modules (`lib/auth/session` vs `lib/auth/policies`).
 
 ---
 
-## 6. Database planning (conceptual - not the final schema)
+## 6. Database design (final schema, `prisma/schema.prisma`)
 
-Conventions: string IDs (cuid/uuid), `createdAt`/`updatedAt` on every table, enums for closed sets, and **no
-hard-coded academic values** (sessions, terms, classes and subjects are rows).
+The schema is implemented, validated and generates a client; **no database exists yet** and no migration has been
+created. Conventions: `cuid` string IDs, `createdAt`/`updatedAt` on mutable tables, enums for closed sets, `Decimal`
+for scores, and **no hard-coded academic values** (sessions, classes, subjects, components and grade bands are rows).
+Table and model names are the same (PascalCase). 21 models, 5 enums.
 
 ### 6.1 Relationship diagram
 
 ```
-User 1---0..1 Student          User 1---0..1 Teacher          User 1---0..1 Admin
- |                              |
- |                              +--< TeacherAssignment >-- (Class, Subject, AcademicSession)
- +--< Session (login)
- +--< AuditLog (as actor)
+User (loginId unique, passwordHash, role, isActive, names ...)
+ |-- 0..1 Student  --< StudentEnrollment >-- SchoolClass, AcademicSession   (class per session)
+ |                 --< Result  (see below)
+ |-- 0..1 Teacher  --< TeacherAssignment >-- SchoolClass, Subject, AcademicSession
+ |-- 0..1 Admin
+ |-- N Session            (database-backed login sessions; only a token hash is stored)
+ |-- N AuditLog           (actor; kept if the user is removed)
+ |-- N Announcement       (createdBy)  >-- optional target SchoolClass (null = school-wide)
+ |-- N ResultPublication  (publishedBy)
+ '-- N Result             (publishedBy, optional)
 
-AcademicSession 1---< Term                        (e.g. 2026/2027 -> First/Second/Third Term)
-AcademicSession 1---< StudentEnrollment >---1 Class        (which class a student is in, per session)
-Student        1---< StudentEnrollment
-Class >---< Subject   (via ClassSubject: which subjects a class takes)
+AcademicSession --< Term      (e.g. 2026/2027 -> FIRST / SECOND / THIRD)
+SchoolClass >--< Subject      via ClassSubject (per AcademicSession)
 
-Result   = one student's report for one term   (Student x Term x Class)
-Student 1---< Result >---1 Term
-Result  1---< ResultEntry >---1 Subject         (one row per subject)
-ResultEntry 1---< ResultEntryScore >---1 AssessmentComponent   (CA, Exam, ... configurable)
-Result  1---< ResultPublication                 (append-only publish/unpublish history)
-GradingScheme 1---< AssessmentComponent
-GradingScheme 1---< GradeBand                   (e.g. 70-100 = A)
-Result >---1 GradingScheme                      (snapshot of which scheme produced this result)
+Result = one student's result for one term
+  Result >-- Student, AcademicSession, Term (composite FK: term belongs to session), SchoolClass, GradingScheme
+  Result --< ResultEntry >-- Subject
+  ResultEntry --< ResultEntryScore >-- AssessmentComponent
+  Result --< ResultPublication              (append-only PUBLISHED / UNPUBLISHED history)
 
-Announcement >---1 User (author);  optional target Class
-AuditLog: actor User, action, entity, entityId, metadata
+GradingScheme --< AssessmentComponent       (CA, Exam, ... configurable)
+GradingScheme --< GradeBand                 (A, B, C ... configurable)
 ```
 
-### 6.2 Models
+### 6.2 Enums
 
-**User** - the login identity, shared by all roles.
-- Fields: `id`, `email` (unique, lowercased), `passwordHash`, `role` (STUDENT | TEACHER | ADMIN), `status`
-  (PENDING | ACTIVE | SUSPENDED | REJECTED), `firstName`, `lastName`, `lastLoginAt`.
-- Relations: optional 1:1 to exactly one of Student / Teacher / Admin; has many sessions.
-- Constraints: unique email; `role` must match the profile that exists (enforced in a service, checked in tests).
-  Exact auth tables (`Session`, `Account`, `VerificationToken`) depend on the chosen auth library.
+| Enum | Values |
+|---|---|
+| `Role` | STUDENT, TEACHER, ADMIN |
+| `Gender` | MALE, FEMALE |
+| `TermName` | FIRST, SECOND, THIRD |
+| `ResultStatus` | DRAFT, SUBMITTED, PUBLISHED |
+| `PublicationAction` | PUBLISHED, UNPUBLISHED |
 
-**Student** - profile and academic identity.
-- Fields: `id`, `userId` (unique, nullable until the student registers), `admissionNumber` (unique), `dateOfBirth`,
-  `gender`, guardian contact, `status` (ACTIVE | GRADUATED | WITHDRAWN).
-- Relations: enrollments, results.
-- Constraints: unique admission number. The student record can exist **before** an account does (admin-created),
-  and registration links to it.
+### 6.3 Models
 
-**Teacher** - staff profile.
-- Fields: `id`, `userId` (unique), `staffNumber` (unique), `phone`, `status`.
-- Relations: teaching assignments.
+| Model | Purpose | Key fields | Unique / indexes |
+|---|---|---|---|
+| `User` | Login identity, one role | loginId, passwordHash, role, firstName, lastName, email?, phone?, isActive | `loginId` unique; index (role, isActive) |
+| `Student` | Student profile | userId, admissionNumber, dateOfBirth?, gender?, guardianName?, guardianPhone?, address? | `userId` unique, `admissionNumber` unique |
+| `Teacher` | Teacher profile | userId, employeeNumber, department?, qualification? | `userId` unique, `employeeNumber` unique |
+| `Admin` | Admin profile | userId | `userId` unique |
+| `Session` | Database-backed login session | userId, tokenHash, expiresAt, lastUsedAt, revokedAt? | `tokenHash` unique; indexes userId, expiresAt |
+| `AcademicSession` | e.g. 2026/2027 | name, startDate, endDate, isCurrent | `name` unique |
+| `Term` | Term within a session | name (TermName), sessionId, dates, isCurrent | unique (sessionId, name); unique (id, sessionId) for the composite FK |
+| `SchoolClass` | JSS 1 ... SS 3 | name, level (sort order), section?, isActive | unique (name, section); index level |
+| `StudentEnrollment` | Student's class in a session | studentId, classId, sessionId, enrolledAt, isActive | unique (studentId, sessionId); index (classId, sessionId), sessionId |
+| `Subject` | A subject | code, name, description?, isActive | `code` unique |
+| `ClassSubject` | Subject offered by a class in a session | classId, subjectId, sessionId | unique (classId, subjectId, sessionId); indexes (sessionId, classId), subjectId |
+| `TeacherAssignment` | Teacher teaches subject to class in session | teacherId, classId, subjectId, sessionId | unique on all four; index (classId, subjectId, sessionId), sessionId, subjectId |
+| `GradingScheme` | A grading configuration | name, description?, isDefault | `name` unique |
+| `AssessmentComponent` | A scored part (CA, Exam ...) | gradingSchemeId, name, shortName, maxScore, weight, sortOrder | unique (scheme, shortName), unique (scheme, name); index (scheme, sortOrder) |
+| `GradeBand` | Grade for a score range | gradingSchemeId, grade, minScore, maxScore, remark, sortOrder | unique (scheme, grade); index (scheme, minScore) |
+| `Result` | One student's result for one term | studentId, sessionId, termId, classId, gradingSchemeId, status, publishedAt?, publishedById? | unique (studentId, sessionId, termId); index (classId, termId, status), termId |
+| `ResultEntry` | Subject line of a result | resultId, subjectId, totalScore?, grade?, remark? | unique (resultId, subjectId); index subjectId |
+| `ResultEntryScore` | One component score | resultEntryId, assessmentComponentId, score | unique (resultEntryId, assessmentComponentId); index component |
+| `ResultPublication` | Publish/unpublish history | resultId, publishedById, publishedAt, action | index (resultId, publishedAt), publishedById |
+| `Announcement` | School-wide or class news | title, content, isPublished, publishedAt?, expiresAt?, createdById, targetClassId? | index (isPublished, publishedAt), targetClassId, createdById |
+| `AuditLog` | Security/integrity trail | userId?, action, entityType, entityId?, metadata? (JSON) | index (userId, createdAt), (entityType, entityId), createdAt |
 
-**Admin** - admin profile.
-- Fields: `id`, `userId` (unique), `title`. A future `permissions`/sub-role field can allow limited admins (e.g.
-  "exams officer") without touching the role enum.
+Relation fields use Prisma's `...Id` naming for the scalar and the plain name for the relation (for example
+`createdById` / `createdBy`, `publishedById` / `publishedBy`).
 
-**AcademicSession** - e.g. `2026/2027`.
-- Fields: `id`, `name` (unique), `startDate`, `endDate`, `isCurrent`.
-- Constraints: at most one `isCurrent = true` (partial unique index); `startDate < endDate`.
+### 6.4 Foreign-key behaviour
 
-**Term** - a term within a session.
-- Fields: `id`, `sessionId`, `name`, `sequence` (1,2,3), `startDate`, `endDate`, `isCurrent`.
-- Constraints: unique (`sessionId`, `sequence`); one current term overall. Number of terms is data, not code.
+- **CASCADE (children that have no meaning alone):** User -> Student / Teacher / Admin / Session; AcademicSession -> Term;
+  GradingScheme -> AssessmentComponent / GradeBand; Result -> ResultEntry; ResultEntry -> ResultEntryScore.
+- **RESTRICT (history is protected):** enrolments, class/subject offerings, teacher assignments, results, result
+  publications and announcements cannot lose the thing they point to. A student, class, session, subject, grading
+  scheme or user that owns history cannot be hard-deleted; **deactivate it instead** (`isActive`).
+- **SET NULL:** `Result.publishedBy` and `AuditLog.user`, so removing a user never deletes the record.
+- **Composite foreign key:** `Result (termId, sessionId) -> Term (id, sessionId)`. The database itself guarantees that a
+  result's term belongs to the result's session, even though both IDs are stored for direct queries.
 
-**Class** - e.g. JSS1 ... SS3 (optionally with an arm: "SS1 A").
-- Fields: `id`, `name`, `arm` (optional), `levelOrder` (for promotion ordering), `isActive`.
-- Constraints: unique (`name`, `arm`). Classes are persistent; *which students are in them* is per session via
-  `StudentEnrollment`, which gives promotion and history for free.
+### 6.5 Rules enforced outside Prisma
 
-**StudentEnrollment** *(supporting)* - student in a class for a session.
-- Fields: `studentId`, `sessionId`, `classId`, `status`.
-- Constraints: unique (`studentId`, `sessionId`) - a student is in one class per session.
+Prisma cannot express these, so they are enforced in the service layer now, and by raw SQL in the first migration where
+noted (they are also listed at the bottom of `schema.prisma`):
 
-**Subject** - e.g. Mathematics.
-- Fields: `id`, `name`, `code` (unique), `isActive`. Plus **ClassSubject** (class x subject) for which subjects each
-  class takes (drives "all required subjects entered" checks before publishing).
+1. `User.role` matches the profile that exists (service, one transaction).
+2. At most one `isCurrent` session, one `isCurrent` term and one `isDefault` grading scheme (partial unique indexes in the first migration).
+3. `SchoolClass (name, section)`: PostgreSQL treats NULL sections as distinct, so classes without a section need a partial unique index on `name WHERE section IS NULL` (first migration).
+4. Score ranges (0 <= score <= maxScore), `minScore <= maxScore` on bands, `startDate < endDate` (Zod + service; CHECK constraints can be added in a migration).
+5. A scheme's component weights add up to 100 and its grade bands neither overlap nor leave gaps (service).
+6. A result's class equals the student's enrolment class for that session; an entry's subject is offered by that class
+   (`ClassSubject`); a teacher writes only subjects they are assigned (`TeacherAssignment`) (service + policies).
+7. Published results are immutable: unpublish (recorded) -> edit -> republish.
 
-**TeacherAssignment** *(supporting, central to authorization)* - teacher may teach subject X to class Y in session Z.
-- Fields: `teacherId`, `classId`, `subjectId`, `sessionId`.
-- Constraints: unique on the four columns. This table, not the UI, decides which entries a teacher may write.
+### 6.6 Differences from the earlier planning draft
 
-**Result** ("report" for one student for one term) - the unit that is drafted, reviewed and published.
-- Fields: `id`, `studentId`, `termId`, `classId`, `gradingSchemeId`, `status`
-  (DRAFT | SUBMITTED | PUBLISHED), `publishedAt`, `version` (optimistic concurrency), optional overall remarks
-  (future teacher/principal comments).
-- Relations: entries, publications.
-- Constraints: **unique (`studentId`, `termId`)**. Student visibility rule: only `PUBLISHED` rows are ever returned to
-  a student.
-- Status meaning: `DRAFT` = being prepared ("Uploading / In Progress"); `SUBMITTED` = teacher finished, awaiting
-  review; `PUBLISHED` = visible to the student. Unpublishing returns it to `DRAFT`, with the history kept in
-  `ResultPublication`.
+Decisions made when the schema was finalised: accounts are created by an admin and have `isActive` (no PENDING/REJECTED
+registration states yet); `Term.name` is the `TermName` enum (no `sequence` column); classes use `level` (sort order)
+and `section` rather than `levelOrder`/`arm`; there is no `Result.version` column (optimistic concurrency can use
+`updatedAt` or be added later); `ResultPublication` has no `reason` and `AuditLog` has no `ip` column. Each can be added
+later as a non-breaking migration if needed.
 
-**ResultEntry** - one subject line within a Result.
-- Fields: `id`, `resultId`, `subjectId`, `total`, `grade`, `remark`, `enteredById` (teacher/admin), timestamps.
-- Constraints: unique (`resultId`, `subjectId`). `total`, `grade` and `remark` are **stored snapshots** computed by
-  the grading service at save time, so changing the grading scheme later never silently rewrites old results.
+### 6.7 Why the schema is shaped this way
 
-**ResultEntryScore** - one component score of an entry (CA, Exam, ...).
-- Fields: `entryId`, `componentId`, `score` (decimal).
-- Constraints: unique (`entryId`, `componentId`); `0 <= score <= component.maxScore` (validated in Zod and the service,
-  with a DB check constraint as backup).
-- **Why not just `caScore` and `examScore` columns?** They would work today but force a schema change if the school
-  adds CA1/CA2/CA3 or a practical. A component table keeps that a data change. *Open question for the school:* keep
-  it simple (two columns) or flexible (component rows)? Recommendation: flexible, seeded with CA and Exam.
+- **Why `StudentEnrollment` exists.** A student's class changes every year. Putting a `classId` on `Student` would
+  overwrite history the moment a student is promoted. An enrolment row per student per session keeps every year
+  (JSS 1 in 2025/2026, JSS 2 in 2026/2027), makes class rosters a simple query, makes promotion "create next session's
+  enrolments", and lets old results keep pointing at the class the student was actually in.
+- **Why results use DRAFT -> SUBMITTED -> PUBLISHED.** Teachers need to save incomplete work (DRAFT) without anyone
+  seeing it; they then hand it over for checking (SUBMITTED, teacher editing locked); only an admin publishes
+  (PUBLISHED). Students only ever receive PUBLISHED results, so half-entered or unchecked scores never leak. Anything
+  else shows "Result Upload in Progress". Unpublishing returns a result to DRAFT, and every publish/unpublish is
+  recorded in `ResultPublication`.
+- **Why assessment components are flexible.** CA and Exam are rows (`AssessmentComponent`) with a maximum score and
+  weight, and each score is a row (`ResultEntryScore`). If the school moves to CA 1, CA 2, Practical, Project and Exam,
+  that is new rows in a new `GradingScheme`, not a schema change. Grade bands are rows too. Each `Result` records the
+  scheme it used, and `totalScore`, `grade` and `remark` are stored snapshots, so changing the scheme later never
+  rewrites old results. Total = sum of (score / maxScore x weight) over the components; weights should add up to 100.
+- **Why student result pages must never trust a `studentId` from the URL.** A URL or form value is chosen by the person
+  making the request; anyone can edit it. If a page accepted a student ID it would be possible to read someone else's
+  results by changing one value. Student-facing data functions therefore take **no** student ID: they read the signed-in
+  user from the server-side session, find that user's `Student` row, and filter by it (plus `status = PUBLISHED`). The
+  only identifier a student can supply is a term, and it is always combined with their own student ID on the server.
+- **Why teachers must be restricted through `TeacherAssignment`.** The `TEACHER` role alone says "this is a teacher",
+  not "this teacher teaches Physics to SS 2 this year". Without the assignment check, any teacher could edit any
+  student's marks. Every teacher read or write of results must confirm a `TeacherAssignment` row for that
+  (teacher, class, subject, session), inside the same transaction as the write.
+- **Why `AuditLog` exists.** Result changes, publishing, account changes and password changes are exactly where
+  disputes and mistakes happen. An append-only record of who did what, to which record, and when, lets the school
+  investigate ("who changed this mark?") and lets developers detect abuse. `ResultPublication` answers the narrower
+  "who published this result and when"; `AuditLog` covers everything else. Entries survive removal of the user
+  (`SET NULL`) and must never contain passwords, tokens or full result data.
 
-**GradingScheme / AssessmentComponent / GradeBand** *(supporting)* - the configurable grading structure.
-- `GradingScheme`: `name`, `isActive`. `AssessmentComponent`: `name`, `maxScore`, `sequence`. `GradeBand`:
-  `minScore`, `maxScore`, `grade`, `remark`. Bands must not overlap or leave gaps (validated on save).
-- Each `Result` records the scheme it was computed under.
+### 6.8 Seed readiness
 
-**ResultPublication** - append-only record of publish/unpublish actions.
-- Fields: `id`, `resultId`, `action` (PUBLISHED | UNPUBLISHED), `actedById` (admin), `reason`, `createdAt`.
-- Purpose: answers "who published this and when?" and survives repeated corrections. `Result.status` is the current
-  state; this table is the history. Both change together in one transaction. Bulk publish (whole class/term) is
-  one transaction creating many rows.
-
-**Announcement** - news for the public site and/or portal.
-- Fields: `id`, `title`, `body`, `audience` (PUBLIC | STUDENTS | TEACHERS | ALL_PORTAL), optional `classId`,
-  `status` (DRAFT | PUBLISHED), `publishedAt`, `expiresAt`, `authorId`.
-- Constraint: only `PUBLISHED` and unexpired rows are queried by the public site.
-
-**AuditLog** *(supporting)* - security and integrity trail.
-- Fields: `actorId`, `action`, `entityType`, `entityId`, `metadata` (JSON, no secrets), `ip`, `createdAt`.
-- Written for logins (success/failure), role/status changes, result edits after submission, publish/unpublish.
-  Append-only: no update/delete code paths.
+The schema supports a development seed of one admin, two teachers, several students, classes, subjects, one session with
+three terms, class-subject offerings, teacher assignments, a grading scheme with CA and Exam components, and grade bands.
+No seed script exists yet. When it is written it must use obviously fake data and generate throw-away passwords at run
+time (never committed).
 
 ---
 
@@ -407,7 +425,7 @@ Rules:
   result is not leaked, and incomplete scores are never sent to the browser.
 - **Editing after publishing:** admin must unpublish first (back to `DRAFT`, recorded), edit, and republish. Every
   step is audited. The student sees "Result Upload in Progress" while it is unpublished.
-- **Concurrent edits:** `Result.version` is checked on save (optimistic concurrency) to avoid two people silently
+- **Concurrent edits:** `Result.updatedAt` is compared on save (optimistic concurrency; a `version` column can be added later) to avoid two people silently
   overwriting each other.
 - **Admin override:** admins may enter or correct entries directly; those writes are audited the same way.
 
@@ -478,7 +496,7 @@ append-only history tables.
 | Audit logging | Append-only `AuditLog` for auth events and all result state changes (section 6). Never log passwords, tokens or full result contents. |
 | Secure database access | TLS to the DB (`sslmode=require`), a least-privilege DB user for the app, pooled connections for serverless, migrations run from CI/admin machine with a separate credential, regular backups. Prisma parameterises queries; raw SQL is avoided or tagged-template only. |
 | Student isolation | Student-facing DAL functions take no student ID; they use the session's student. Covered by automated tests (student A cannot read student B, via URL, action or API). |
-| Preventing unauthorized result changes | Writes require role + `TeacherAssignment` + editable status, in one transaction; published results are immutable except via audited unpublish; `version` check; every change in `AuditLog`. |
+| Preventing unauthorized result changes | Writes require role + `TeacherAssignment` + editable status, in one transaction; published results are immutable except via audited unpublish; `updatedAt` concurrency check; every change in `AuditLog`. |
 | Other | Security headers / CSP, no secrets in client bundles, generic login error messages (no user enumeration), uniform response timing on login, dependency audit in CI (current scaffold reports 5 high advisories - see README/handover). |
 
 ---
@@ -495,7 +513,9 @@ files. Additional variables (email provider, rate-limit store) are added when th
 ## 13. Prisma 7.10 conventions in this project
 
 - `prisma` and `@prisma/client` are both `7.10.0` (kept aligned; do not upgrade one alone).
-- `prisma/schema.prisma` currently holds only the `generator` and `datasource` blocks - **no models**.
+- `prisma/schema.prisma` holds the full schema (section 6): 21 models, 5 enums. It validates and generates without a
+  database (`prisma validate`, `prisma generate`); `prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script`
+  renders the SQL offline for review.
   - Generator is `prisma-client` (not the legacy `prisma-client-js`) with `output = "../src/generated/prisma"`.
     Import the client from `@/generated/prisma/client`, not from `@prisma/client`. The output folder is git-ignored.
   - The datasource block has **no `url`**: in Prisma 7 the connection URL lives in `prisma.config.ts`, not the schema.

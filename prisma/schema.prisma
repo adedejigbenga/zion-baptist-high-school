@@ -1,7 +1,8 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Zion Baptist High School - database schema (Prisma 7.10, PostgreSQL).
+//
+// The connection URL is NOT in this file: Prisma 7 reads it from prisma.config.ts (DATABASE_URL).
+// Design notes live in ARCHITECTURE.md (section 6). Rules the database cannot express are listed at the
+// bottom of this file ("Rules enforced outside Prisma").
 
 generator client {
   provider = "prisma-client"
@@ -11,3 +12,465 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// =====================================================================================================
+// Enums
+// =====================================================================================================
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+/// Position of a term within an academic session. Display labels ("First Term") belong to the UI.
+enum TermName {
+  FIRST
+  SECOND
+  THIRD
+}
+
+/// DRAFT -> SUBMITTED -> PUBLISHED. Only PUBLISHED results may ever be shown to a student.
+enum ResultStatus {
+  DRAFT
+  SUBMITTED
+  PUBLISHED
+}
+
+enum PublicationAction {
+  PUBLISHED
+  UNPUBLISHED
+}
+
+// =====================================================================================================
+// Users, roles and login sessions
+// =====================================================================================================
+
+/// A login identity. Exactly one role; exactly one matching profile (Student, Teacher or Admin).
+/// Users are deactivated (isActive = false), never deleted, once they own history.
+model User {
+  id           String   @id @default(cuid())
+  loginId      String   @unique
+  passwordHash String
+  role         Role
+  firstName    String
+  lastName     String
+  email        String?
+  phone        String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  student Student?
+  teacher Teacher?
+  admin   Admin?
+
+  sessions             Session[]
+  auditLogs            AuditLog[]
+  createdAnnouncements Announcement[]      @relation("AnnouncementCreatedBy")
+  publishedResults     Result[]            @relation("ResultPublishedBy")
+  resultPublications   ResultPublication[] @relation("ResultPublicationActor")
+
+  @@index([role, isActive])
+}
+
+model Student {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  admissionNumber String    @unique
+  dateOfBirth     DateTime? @db.Date
+  gender          Gender?
+  guardianName    String?
+  guardianPhone   String?
+  address         String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enrollments StudentEnrollment[]
+  results     Result[]
+}
+
+model Teacher {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  employeeNumber String   @unique
+  department     String?
+  qualification  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignments TeacherAssignment[]
+}
+
+model Admin {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Database-backed login session (used by the future authentication step). Only a hash of the
+/// session token is stored, never the token itself.
+model Session {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime  @default(now())
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// =====================================================================================================
+// Academic structure
+// =====================================================================================================
+
+/// e.g. "2025/2026". At most one row may have isCurrent = true (see "Rules enforced outside Prisma").
+model AcademicSession {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  isCurrent Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  terms              Term[]
+  enrollments        StudentEnrollment[]
+  classSubjects      ClassSubject[]
+  teacherAssignments TeacherAssignment[]
+  results            Result[]
+}
+
+model Term {
+  id        String   @id @default(cuid())
+  name      TermName
+  sessionId String
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  isCurrent Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  session AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  results Result[]
+
+  /// A session cannot have the same term twice.
+  @@unique([sessionId, name])
+  /// Target of Result's composite foreign key, so a result's term must belong to the result's session.
+  @@unique([id, sessionId])
+}
+
+/// A class such as "JSS 1" or "SS 3" (optionally with a section, e.g. "A").
+/// Which students are in a class is recorded per session in StudentEnrollment.
+model SchoolClass {
+  id        String   @id @default(cuid())
+  name      String
+  /// Sort/promotion order: 1 = JSS 1 ... 6 = SS 3.
+  level     Int
+  section   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  enrollments           StudentEnrollment[]
+  classSubjects         ClassSubject[]
+  teacherAssignments    TeacherAssignment[]
+  results               Result[]
+  targetedAnnouncements Announcement[]
+
+  @@unique([name, section])
+  @@index([level])
+}
+
+/// A student's class for one academic session. Keeping this separate from Student preserves history
+/// when the student moves up (JSS 1 in 2025/2026, JSS 2 in 2026/2027).
+model StudentEnrollment {
+  id         String   @id @default(cuid())
+  studentId  String
+  classId    String
+  sessionId  String
+  enrolledAt DateTime @default(now())
+  isActive   Boolean  @default(true)
+
+  student Student         @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  class   SchoolClass     @relation(fields: [classId], references: [id], onDelete: Restrict)
+  session AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+
+  /// One class per student per session.
+  @@unique([studentId, sessionId])
+  /// Class roster for a session.
+  @@index([classId, sessionId])
+  @@index([sessionId])
+}
+
+model Subject {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  classSubjects      ClassSubject[]
+  teacherAssignments TeacherAssignment[]
+  resultEntries      ResultEntry[]
+}
+
+/// A subject offered by a class in a session.
+model ClassSubject {
+  id        String   @id @default(cuid())
+  classId   String
+  subjectId String
+  sessionId String
+  createdAt DateTime @default(now())
+
+  class   SchoolClass     @relation(fields: [classId], references: [id], onDelete: Restrict)
+  subject Subject         @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  session AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+
+  @@unique([classId, subjectId, sessionId])
+  @@index([sessionId, classId])
+  @@index([subjectId])
+}
+
+/// Which teacher teaches which subject to which class in a session. This table - not the UI - decides
+/// which results a teacher may create or edit.
+model TeacherAssignment {
+  id        String   @id @default(cuid())
+  teacherId String
+  classId   String
+  subjectId String
+  sessionId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teacher Teacher         @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  class   SchoolClass     @relation(fields: [classId], references: [id], onDelete: Restrict)
+  subject Subject         @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  session AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+
+  @@unique([teacherId, classId, subjectId, sessionId])
+  /// "Who teaches this subject to this class this session?"
+  @@index([classId, subjectId, sessionId])
+  @@index([sessionId])
+  @@index([subjectId])
+}
+
+// =====================================================================================================
+// Grading (configurable: no grade, component or weight is hard-coded in application logic)
+// =====================================================================================================
+
+model GradingScheme {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  components AssessmentComponent[]
+  gradeBands GradeBand[]
+  results    Result[]
+}
+
+/// One scored part of a subject result, e.g. "Continuous Assessment" (CA, max 40, weight 40%).
+/// total = sum( score / maxScore * weight ) over the scheme's components; weights should add up to 100.
+model AssessmentComponent {
+  id              String  @id @default(cuid())
+  gradingSchemeId String
+  name            String
+  shortName       String
+  maxScore        Decimal @db.Decimal(6, 2)
+  /// Percentage contribution to the total (0-100).
+  weight          Decimal @db.Decimal(5, 2)
+  sortOrder       Int     @default(0)
+
+  gradingScheme GradingScheme      @relation(fields: [gradingSchemeId], references: [id], onDelete: Cascade)
+  scores        ResultEntryScore[]
+
+  @@unique([gradingSchemeId, shortName])
+  @@unique([gradingSchemeId, name])
+  @@index([gradingSchemeId, sortOrder])
+}
+
+/// A grade for a range of totals, e.g. A, 70-100, "Excellent". Bands in a scheme must not overlap.
+model GradeBand {
+  id              String  @id @default(cuid())
+  gradingSchemeId String
+  grade           String
+  minScore        Decimal @db.Decimal(5, 2)
+  maxScore        Decimal @db.Decimal(5, 2)
+  remark          String
+  sortOrder       Int     @default(0)
+
+  gradingScheme GradingScheme @relation(fields: [gradingSchemeId], references: [id], onDelete: Cascade)
+
+  @@unique([gradingSchemeId, grade])
+  /// Look up the band for a total.
+  @@index([gradingSchemeId, minScore])
+}
+
+// =====================================================================================================
+// Results
+// =====================================================================================================
+
+/// One student's result for one term. It is the unit that moves DRAFT -> SUBMITTED -> PUBLISHED.
+/// The grading scheme is recorded so later scheme changes never alter an existing result.
+model Result {
+  id              String       @id @default(cuid())
+  studentId       String
+  sessionId       String
+  termId          String
+  classId         String
+  gradingSchemeId String
+  status          ResultStatus @default(DRAFT)
+  publishedAt     DateTime?
+  publishedById   String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  student       Student         @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  session       AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  /// Composite key: the term must belong to this result's session.
+  term          Term            @relation(fields: [termId, sessionId], references: [id, sessionId], onDelete: Restrict)
+  class         SchoolClass     @relation(fields: [classId], references: [id], onDelete: Restrict)
+  gradingScheme GradingScheme   @relation(fields: [gradingSchemeId], references: [id], onDelete: Restrict)
+  publishedBy   User?           @relation("ResultPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+
+  entries      ResultEntry[]
+  publications ResultPublication[]
+
+  /// One result per student per term (the session is implied by the term, kept for direct queries).
+  @@unique([studentId, sessionId, termId])
+  /// Class result lists for review/publishing.
+  @@index([classId, termId, status])
+  @@index([termId])
+}
+
+/// A subject line within a result.
+model ResultEntry {
+  id         String   @id @default(cuid())
+  resultId   String
+  subjectId  String
+  /// Computed from the scores and the scheme at save time (a stored snapshot).
+  totalScore Decimal? @db.Decimal(6, 2)
+  grade      String?
+  remark     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  result  Result             @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  subject Subject            @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  scores  ResultEntryScore[]
+
+  @@unique([resultId, subjectId])
+  @@index([subjectId])
+}
+
+/// One component score (CA, Exam, ...) of a result entry.
+model ResultEntryScore {
+  id                    String  @id @default(cuid())
+  resultEntryId         String
+  assessmentComponentId String
+  score                 Decimal @db.Decimal(6, 2)
+
+  resultEntry         ResultEntry         @relation(fields: [resultEntryId], references: [id], onDelete: Cascade)
+  assessmentComponent AssessmentComponent @relation(fields: [assessmentComponentId], references: [id], onDelete: Restrict)
+
+  @@unique([resultEntryId, assessmentComponentId])
+  @@index([assessmentComponentId])
+}
+
+/// Append-only history of publish / unpublish actions on a result.
+model ResultPublication {
+  id            String            @id @default(cuid())
+  resultId      String
+  publishedById String
+  publishedAt   DateTime          @default(now())
+  action        PublicationAction
+
+  result      Result @relation(fields: [resultId], references: [id], onDelete: Restrict)
+  publishedBy User   @relation("ResultPublicationActor", fields: [publishedById], references: [id], onDelete: Restrict)
+
+  @@index([resultId, publishedAt])
+  @@index([publishedById])
+}
+
+// =====================================================================================================
+// Announcements and audit
+// =====================================================================================================
+
+/// School-wide when targetClassId is null, otherwise for one class.
+model Announcement {
+  id            String    @id @default(cuid())
+  title         String
+  content       String    @db.Text
+  publishedAt   DateTime?
+  expiresAt     DateTime?
+  isPublished   Boolean   @default(false)
+  createdById   String
+  targetClassId String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  createdBy   User         @relation("AnnouncementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  targetClass SchoolClass? @relation(fields: [targetClassId], references: [id], onDelete: Restrict)
+
+  @@index([isPublished, publishedAt])
+  @@index([targetClassId])
+  @@index([createdById])
+}
+
+/// Append-only record of important actions. userId becomes null if the user is ever removed;
+/// the entry itself is kept. Never store passwords, tokens or full result data in metadata.
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// =====================================================================================================
+// Rules enforced outside Prisma (service layer now; raw SQL in the first migration where noted)
+// =====================================================================================================
+//
+// 1. User.role must match the profile that exists (STUDENT -> Student, TEACHER -> Teacher, ADMIN -> Admin).
+//    Enforced by the service that creates users, in a single transaction.
+// 2. At most one AcademicSession with isCurrent = true, one Term with isCurrent = true, and one
+//    GradingScheme with isDefault = true.  -> partial unique indexes (WHERE ... = true) in the first migration.
+// 3. SchoolClass(name, section): PostgreSQL treats NULL sections as distinct, so two "JSS 1" rows with no section
+//    would be allowed.  -> partial unique index on (name) WHERE section IS NULL in the first migration.
+// 4. Score ranges: 0 <= ResultEntryScore.score <= AssessmentComponent.maxScore; GradeBand.minScore <= maxScore;
+//    AcademicSession/Term startDate < endDate.  -> Zod + service now; CHECK constraints can be added in a migration.
+// 5. A scheme's component weights add up to 100, and its grade bands do not overlap or leave gaps.  -> service.
+// 6. A result's class must equal the student's enrollment class for that session; a result entry's subject must be
+//    offered by that class (ClassSubject); a teacher may write only entries they are assigned to
+//    (TeacherAssignment).  -> service + authorization policies.
+// 7. Published results are immutable: edits require unpublish (recorded in ResultPublication) -> edit -> republish.
+// 8. Users, enrolments, results and publications are never hard-deleted once they own history (relations use
+//    onDelete: Restrict for that reason); deactivate instead.
