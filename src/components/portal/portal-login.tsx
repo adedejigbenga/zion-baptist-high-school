@@ -1,14 +1,13 @@
-import { CircleCheckIcon, FlaskConicalIcon } from "lucide-react"
+import { CircleCheckIcon } from "lucide-react"
 
 import { PortalBackLink } from "@/components/portal/portal-back-link"
 import { PortalLoginForm } from "@/components/portal/portal-login-form"
-import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { portalRoles } from "@/lib/portal-config"
 import { siteConfig } from "@/lib/site-config"
 import type { PortalRoleId } from "@/types/portal"
 
-/** Reusable (prototype) sign-in screen for any portal role. */
+/** Reusable sign-in screen for any portal role. */
 function PortalLogin({ roleId }: { roleId: PortalRoleId }) {
   const role = portalRoles[roleId]
   const Icon = role.icon
@@ -27,10 +26,6 @@ function PortalLogin({ roleId }: { roleId: PortalRoleId }) {
           </span>
           <div className="flex flex-col gap-1">
             <p className="type-caption font-semibold text-muted-foreground">{siteConfig.name}</p>
-            <Badge variant="info">
-              <FlaskConicalIcon aria-hidden="true" />
-              Prototype
-            </Badge>
           </div>
         </div>
         <div className="flex flex-col gap-2">
@@ -41,7 +36,7 @@ function PortalLogin({ roleId }: { roleId: PortalRoleId }) {
 
       <Card>
         <CardContent>
-          <PortalLoginForm roleName={role.name} />
+          <PortalLoginForm roleId={roleId} />
         </CardContent>
       </Card>
 

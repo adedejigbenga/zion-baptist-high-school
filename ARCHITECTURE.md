@@ -1,8 +1,8 @@
 # Zion Baptist High School - Architecture
 
-> Status: **design document.** The database (section 6) is implemented: `prisma/schema.prisma`, the migration
-> `init_school_portal` applied to a local PostgreSQL 17 database, and a development seed. Everything else described as
-> "future" (authentication, authorization, services, result pages) is not implemented.
+> Status: **design document.** Authentication (section 4) and the database (section 6) are implemented: `prisma/schema.prisma`, the migration
+> `init_school_portal` applied to a local PostgreSQL 17 database, and a development seed. Role-based access exists for the
+> three portal landing pages only; the data layer, result pages and dashboards described below are not built yet.
 
 Stack: Next.js 16 (App Router, Cache Components enabled), TypeScript, Tailwind CSS 4, shadcn/ui,
 PostgreSQL + Prisma 7.10, Zod 4. Deployment target: Vercel, with PostgreSQL hosted separately.
@@ -107,7 +107,7 @@ src/app/
   portal/
     layout.tsx                  portal shell, no data access
     page.tsx                    "/portal" role-based redirect
-    (auth)/                     login, register, forgot password (guests only)
+    (auth)/                     gateway and sign-in pages (shared brand-panel layout)
     (protected)/
       student/                  STUDENT only
       teacher/                  TEACHER only
@@ -163,47 +163,92 @@ Rules of thumb:
 
 ---
 
-## 4. Authentication architecture (future, not implemented)
+## 4. Authentication architecture (implemented)
 
 **Goal:** establish *who the user is*, securely, on the server.
 
-**Solution: not yet selected.** `AUTH_SECRET` in `.env.example` points at Auth.js (NextAuth v5) by convention, but
-the choice is open and should be made at the start of the authentication step. Decision criteria:
+**Decision: a small custom implementation, no authentication library.** Reasons: the `Session` and `AuditLog` tables
+already exist; database-backed sessions give instant revocation (deactivating a user or signing out ends access at
+once), which Auth.js with a credentials provider cannot do without extra work; it adds no dependency; and the amount of
+code is small enough to test completely. `AUTH_SECRET` in `.env.example` is currently unused (see "Not built yet").
 
-| Option | Fit | Concern |
-|---|---|---|
-| Auth.js (NextAuth v5) Credentials | Familiar, large ecosystem | Credentials provider forces JWT sessions; instantly revoking a suspended teacher is harder; email/password flows (reset, verification) are mostly DIY. |
-| Better Auth | Email/password, DB sessions and Prisma adapter built in | Newer library; confirm maturity and Next.js 16 / Cache Components compatibility. |
-| Small custom DB-session layer (hashed password + opaque session token cookie, as in the Next.js authentication guide) | Fewest dependencies, full control, instant revocation | More security-sensitive code to write and own. |
+### 4.1 How sign-in works
 
-**Recommendation:** use **database-backed sessions** (opaque random token in an `HttpOnly` cookie, hash of the token
-stored in a `Session` table) with either Better Auth or the small custom layer. This allows immediate revocation when
-an admin suspends an account or a user changes their password. Final choice to be confirmed before implementation.
+1. **Form** (`/portal/<role>/login`): a client form calls the `signIn` Server Action (`src/lib/auth/actions.ts`). The
+   portal (student / teacher / admin) is bound to the page; the action validates everything again with Zod.
+2. **`authenticate()`** (`src/lib/auth/service.ts`):
+   - rate-limit check (below), then look up the user by `loginId`;
+   - **always** verify an Argon2id hash (a dummy hash if the login ID does not exist), so timing does not reveal which
+     login IDs are real;
+   - fail if the password is wrong, the account is inactive, or the account's role is not the portal's role; the
+     role/profile must also be consistent (a STUDENT must have a `Student` row);
+   - **every failure returns the same result to the browser** ("Incorrect Login ID or password."); the true reason
+     (`unknown_login_id`, `wrong_password`, `inactive_account`, `wrong_portal`, `inconsistent_account`) goes only to the audit log.
+3. **Session creation:** a 256-bit random token (`crypto.randomBytes(32)`, base64url) is generated. **Only its SHA-256
+   hash** is stored in `Session.tokenHash`; the raw token exists only in the cookie. Sessions older than a week are purged opportunistically.
+4. **Cookie:** `__Host-zbhs_session` in production (`zbhs_session` in development because browsers need HTTPS for the
+   prefix), `HttpOnly`, `Secure` (production), `SameSite=Lax`, `Path=/`, no `Domain`, expires with the session. It carries
+   only the token: never a role, a user ID or any user data.
+5. **Redirect:** to the home page of the role stored **in the database** (`/portal/student`, `/portal/teacher`, `/portal/admin`).
 
-**Intended flow**
+### 4.2 On every request
 
-1. **Registration** (students and teachers): creates a `User` with `isActive = false` (pending approval; the schema has no separate PENDING state). The role is determined by
-   *which registration form was used on the server*, never by a client-supplied field. Student registration
-   additionally requires an admission number that links to an existing student record created by an admin; a
-   registration alone grants no access to any academic data.
-2. **Approval:** an admin approves (sets `isActive = true`) or rejects. Only active users can sign in. `ADMIN` accounts are
-   never self-registered: the first is created by a seed/CLI step, later ones by existing admins.
-3. **Login:** Zod-validate, look up user, verify password hash (constant-time), reject non-`ACTIVE`, rate-limit,
-   create a session, set the cookie (`HttpOnly`, `Secure`, `SameSite=Lax`, scoped `Path=/`), redirect by role.
-4. **Per request:** `getCurrentUser()` reads the cookie, validates the session against the DB (expiry, revoked,
-   user still `ACTIVE`) and returns a **narrow** object (`id`, `role`, profile id) - never the password hash.
-5. **Logout / password change:** delete the session row(s); changing the password revokes all other sessions.
-6. **`proxy.ts`:** only an optimistic check ("session cookie present?") to redirect guests away from `/portal/**`
-   quickly. It does **not** hit the database and is **not** the security check.
+- `getCurrentUser()` (`src/lib/auth/current-user.ts`) reads the cookie, hashes it, loads the session and user, and returns
+  a narrow `SessionUser` (id, loginId, role, names, and exactly one of `studentId` / `teacherId` / `adminId`), or `null`.
+  Memoised per request with React `cache`. Because it reads cookies, it must run under `<Suspense>` (Cache Components).
+- A session is valid only if it is not revoked, not past `expiresAt`, not idle too long, and the **user is still active**.
+  The database is consulted every time, so revocation and deactivation take effect immediately.
+- Lifetimes (`src/lib/auth/config.ts`): students and teachers 7 days absolute / 24 hours idle; administrators 12 hours
+  absolute / 2 hours idle. `lastUsedAt` is refreshed at most every 5 minutes.
+- **`proxy.ts`** is only an optimistic gate: if there is no session cookie, `/portal/student|teacher|admin/**` (except
+  `/login`) redirects to the right sign-in page. It never queries the database and never decides roles; a forged or expired
+  cookie passes it on purpose and is rejected by the server-side check.
+- `requireRole(role)` is called at the top of every protected page (and must be called in every Server Action and
+  data function that returns private data). Not signed in -> that role's sign-in page; wrong role -> the user's own home.
+  **The protected layout is only a frame**: layouts do not re-run on client-side navigation, so they are never the security check.
 
-**Cache Components note:** reading the session reads cookies at request time, so any component that calls
-`getCurrentUser()` sits behind `<Suspense>`, and session reads are kept out of the top level of layouts (see
-`node_modules/next/dist/docs/01-app/02-guides/authentication-with-cache-components.md`). Portal pages that depend on a
-session are therefore dynamic; the public site stays static.
+### 4.3 Brute-force protection
+
+Failed sign-ins are counted from the audit log (no Redis, no extra table): **5 failures per login ID** or **20 per IP
+address** within **15 minutes** blocks further attempts, even with the correct password (the block is also audited).
+Login IDs are counted by a SHA-256 key, so non-existent IDs are limited exactly like real ones and typed values (which
+may be a password typed into the wrong box) are never stored in clear. Trade-offs: a person can lock a specific account
+for 15 minutes by failing deliberately (accepted); the IP is trusted only behind Vercel, where the platform sets
+`x-forwarded-for` (locally it can be spoofed).
+
+### 4.4 Sign-out
+
+The `signOut` Server Action (a real `<form>` POST) revokes the session in the database (`revokedAt`), records
+`AUTH_LOGOUT`, and expires the cookie by overwriting it with the **same attributes** (a `__Host-` cookie ignores a
+change that lacks `Secure`, so `cookies().delete()` is not used). `revokeAllSessionsForUser()` exists for password
+changes and deactivation.
+
+### 4.5 Audit events
+
+`AUTH_LOGIN_SUCCESS`, `AUTH_LOGIN_FAILED`, `AUTH_LOGIN_BLOCKED`, `AUTH_LOGOUT` in `AuditLog` (user, IP, portal, hashed
+login ID, failure reason). Never passwords, tokens or typed login IDs.
+
+### 4.6 Testing
+
+- **Unit and database tests** (`npm test`, vitest, 37 tests): token and password handling, input validation, configuration,
+  sign-in success and every failure mode, rate limiting (per login ID, per IP, window expiry), session expiry, idle
+  timeout, revocation, deactivation, role/profile consistency. Database tests run against a separate `*_test` database
+  that is created and migrated automatically and can never be the development database. The tests were checked by
+  deliberately breaking the code (removing the role check, the active check, hashing of tokens): the suite fails each time.
+- **End-to-end** (real browser against the production build and the development database): redirects with no cookie,
+  wrong password, forged cookie, replay of a signed-out cookie, role separation, deactivation, rate limiting, cookie
+  attributes, hash-only storage, audit contents. 28/28 passed when this step was completed. These scripts are not yet
+  part of the repository.
+
+### 4.7 Not built yet
+
+Password change and reset, "sign out everywhere" UI, redirecting already-signed-in users away from login pages, CAPTCHA,
+multi-factor authentication for administrators, and use of `AUTH_SECRET` (reserved for signing future tokens such as
+password-reset links). Registration is not planned: accounts are created by an administrator.
 
 ---
 
-## 5. Authorization architecture (future, not implemented)
+## 5. Authorization architecture (foundation implemented)
 
 Authentication answers "who?"; authorization answers "may this person do this to this record?". They are kept in
 separate modules (`lib/auth/session` vs `lib/auth/policies`).

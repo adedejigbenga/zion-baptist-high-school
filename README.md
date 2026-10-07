@@ -21,7 +21,7 @@ A web application for Zion Baptist High School.
 
 ## Current Development Stage
 
-**Step 7 - Local database.** The public homepage and a visual-only portal gateway are built on the design system ([DESIGN-SYSTEM.md](DESIGN-SYSTEM.md)). The Prisma schema (21 models) is migrated to a local PostgreSQL database and a development seed exists ([ARCHITECTURE.md](ARCHITECTURE.md), section 6). There is no real authentication, no API and no page that reads the database yet. Hero image, logo mark, news items and contact details are temporary placeholders (see `src/lib/site-config.ts` and `src/lib/demo/`).
+**Step 8 - Authentication.** The public homepage, the portal gateway and a local PostgreSQL database (21-model Prisma schema, migrations, demo seed) are in place ([ARCHITECTURE.md](ARCHITECTURE.md), [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md)). Students, teachers and administrators can now sign in and out with database-backed sessions; after signing in each role reaches a temporary landing page. The dashboards, result pages and any page that reads academic data are not built yet. Hero image, logo mark, news items and contact details are temporary placeholders (see `src/lib/site-config.ts` and `src/lib/demo/`).
 
 ## Local Database Setup
 
@@ -74,7 +74,20 @@ Shared demo password: `ZionDemo#2026`
 | Student | `ZBHS/2026/005` David Peter | SS 1: no result yet |
 | Student | `ZBHS/2026/006` Ruth Samuel | SS 3: no result yet |
 
-These accounts cannot be used to sign in yet: authentication is not built.
+Sign in at `/portal` (choose the portal that matches the account). After 5 wrong attempts for one Login ID within 15 minutes
+further attempts are blocked for the rest of that window; to clear it while developing, run
+`DELETE FROM "AuditLog" WHERE action LIKE 'AUTH_%';` against the development database.
+
+## Running the Tests
+
+```bash
+npm test            # unit + database tests (vitest)
+npm run test:watch  # re-run on change
+```
+
+Database tests use a separate `zion_baptist_high_school_test` database. It is created and migrated automatically the
+first time (the `zion_app` role needs `CREATEDB`), and the test helpers refuse to run against any database whose name
+does not end in `_test`, so the development data is never touched.
 
 ## Getting Started
 

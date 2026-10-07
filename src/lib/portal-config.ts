@@ -2,7 +2,7 @@ import { GraduationCapIcon, PresentationIcon, ShieldCheckIcon, type LucideIcon }
 
 import type { PortalRoleId } from "@/types/portal"
 
-/** Presentation content for the portal gateway and the (prototype) login pages. No auth logic lives here. */
+/** Presentation content for the portal gateway and the login pages. No auth logic lives here. */
 export type PortalRoleConfig = {
   id: PortalRoleId
   /** e.g. "Student Portal" */
@@ -11,7 +11,7 @@ export type PortalRoleConfig = {
   /** Gateway card text. */
   gatewayDescription: string
   gatewayCta: string
-  /** Temporary prototype login route for this role. */
+  /** Sign-in page for this role. */
   loginHref: string
   /** Login page text. */
   loginSubtitle: string
