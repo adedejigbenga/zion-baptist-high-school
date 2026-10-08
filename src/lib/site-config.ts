@@ -29,23 +29,54 @@ export const siteConfig = {
     phone: "+234 800 000 0000",
     email: "info@zionbaptist.example",
     address: ["School Road", "Town, State", "Nigeria"],
+    /** One line for the slim top bar. */
+    location: "Town, State, Nigeria",
+    // PLACEHOLDER opening hours.
+    hours: [
+      { days: "Monday - Friday", time: "8:00 AM - 4:00 PM" },
+      { days: "Saturday - Sunday", time: "Closed" },
+    ],
   },
+
+  /** Social profiles. Leave null until the school has real accounts: icons without a link are shown as "coming soon". */
+  social: {
+    facebook: null as string | null,
+    instagram: null as string | null,
+    youtube: null as string | null,
+    x: null as string | null,
+  },
+
+  /**
+   * False until the contact form is connected to email or a database (see src/lib/services/enquiry.ts).
+   * While false, the form says plainly that delivery is not connected yet.
+   */
+  enquiryDeliveryConnected: false,
 } as const
 
 export type NavItem = { label: string; href: string }
 
-/** Main public navigation. Pages other than "/" are built in later steps. */
+/** Main public navigation. The Portal is a separate button (see PublicHeader). */
 export const mainNav: readonly NavItem[] = [
   { label: "Home", href: "/" },
   { label: "About Us", href: "/about" },
   { label: "Academics", href: "/academics" },
+  { label: "Facilities", href: "/facilities" },
   { label: "Admissions", href: "/admissions" },
+  { label: "Student Life", href: "/student-life" },
   { label: "News & Events", href: "/news" },
   { label: "Contact", href: "/contact" },
 ]
 
+/** Links on the right of the slim top bar. */
+export const topBarLinks: readonly NavItem[] = [
+  { label: "News & Events", href: "/news" },
+  { label: "Alumni", href: "/student-life#alumni" },
+  { label: "Parent / Student Login", href: siteConfig.portalHref },
+]
+
 /** Portal entry points shown in the footer. Both lead to the portal entry page for now. */
 export const portalLinks: readonly NavItem[] = [
-  { label: "Student Portal", href: siteConfig.portalHref },
-  { label: "Teacher Portal", href: siteConfig.portalHref },
+  { label: "Student Portal", href: "/portal/student/login" },
+  { label: "Teacher Portal", href: "/portal/teacher/login" },
+  { label: "Portal Home", href: siteConfig.portalHref },
 ]

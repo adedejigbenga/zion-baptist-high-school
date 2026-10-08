@@ -14,7 +14,7 @@ const visualIcons: Record<NewsItem["visual"], LucideIcon> = {
   community: CalendarDaysIcon,
 }
 
-const dateFormat = new Intl.DateTimeFormat("en-GB", {
+export const dateFormat = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "long",
   year: "numeric",
@@ -22,7 +22,7 @@ const dateFormat = new Intl.DateTimeFormat("en-GB", {
 })
 
 /** Photo when the item has one, otherwise a tasteful illustrated placeholder. */
-function NewsVisual({ item }: { item: NewsItem }) {
+export function NewsVisual({ item }: { item: NewsItem }) {
   if (item.image) {
     return (
       <div className="relative aspect-[16/10] bg-brand-50">
@@ -51,7 +51,7 @@ function NewsVisual({ item }: { item: NewsItem }) {
   )
 }
 
-function NewsCard({ item }: { item: NewsItem }) {
+export function NewsCard({ item }: { item: NewsItem }) {
   return (
     <Card interactive className="h-full gap-0 py-0">
       <NewsVisual item={item} />
@@ -68,7 +68,7 @@ function NewsCard({ item }: { item: NewsItem }) {
         <Link
           href={item.href ?? "/news"}
           aria-label={`Read more: ${item.title}`}
-          className="mt-auto inline-flex items-center gap-1.5 pt-2 type-label text-primary outline-none after:absolute after:inset-0 after:content-[''] hover:underline underline-offset-4"
+          className="mt-auto inline-flex items-center gap-1.5 pt-2 type-label text-primary outline-none after:absolute after:inset-0 after:rounded-xl after:content-[''] hover:underline underline-offset-4 focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ring"
         >
           Read More
           <ArrowRightIcon className="size-4" aria-hidden="true" />
@@ -81,7 +81,7 @@ function NewsCard({ item }: { item: NewsItem }) {
 /** Takes plain NewsItem[]: swap the demo data for database content later without touching this component. */
 function NewsSection({ items }: { items: NewsItem[] }) {
   return (
-    <section aria-labelledby="news-heading" className="page-section">
+    <section aria-labelledby="news-heading" className="page-section bg-surface-subtle">
       <div className="page-container flex flex-col gap-10 lg:gap-12">
         <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
           <SectionHeading
@@ -97,7 +97,7 @@ function NewsSection({ items }: { items: NewsItem[] }) {
         </div>
 
         <ul className="grid gap-6 md:grid-cols-3">
-          {items.map((item) => (
+          {items.slice(0, 3).map((item) => (
             <li key={item.slug} className="flex">
               <div className="w-full">
                 <NewsCard item={item} />

@@ -35,14 +35,14 @@ function MainNav({ items, orientation = "horizontal", onNavigate, className }: M
               aria-current={active ? "page" : undefined}
               className={cn(
                 "relative flex items-center rounded-lg type-label transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-                vertical ? "min-h-12 px-3 text-base" : "h-10 px-3",
+                vertical ? "min-h-12 px-3 text-base" : "h-10 px-2.5 2xl:px-3",
                 active
                   ? "text-primary"
                   : "text-foreground hover:bg-muted hover:text-primary",
                 active && vertical && "bg-secondary text-secondary-foreground",
                 // Desktop: purple underline marks the current page (not colour alone)
                 !vertical &&
-                  "after:absolute after:inset-x-3 after:-bottom-px after:h-0.5 after:rounded-full after:bg-primary after:opacity-0 after:transition-opacity",
+                  "after:absolute after:inset-x-2.5 after:-bottom-px after:h-0.5 after:rounded-full after:bg-primary after:opacity-0 after:transition-opacity",
                 !vertical && active && "after:opacity-100"
               )}
             >

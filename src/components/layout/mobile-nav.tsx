@@ -25,7 +25,7 @@ function MobileNav() {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
         render={
-          <Button variant="outline" size="icon" aria-label="Open menu" className="lg:hidden" />
+          <Button variant="outline" size="icon" aria-label="Open menu" className="xl:hidden" />
         }
       >
         <MenuIcon aria-hidden="true" />
@@ -45,7 +45,7 @@ function MobileNav() {
             onClick={() => setOpen(false)}
             className={buttonVariants({ size: "lg", className: "w-full" })}
           >
-            Visit the Portal
+            Portal
             <ArrowRightIcon aria-hidden="true" />
           </Link>
         </div>

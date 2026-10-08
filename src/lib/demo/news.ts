@@ -33,4 +33,31 @@ export const demoNews: NewsItem[] = [
     date: "2026-10-02",
     visual: "community",
   },
+  {
+    slug: "inter-house-sports-preparations",
+    title: "Preparations for Inter-House Sports",
+    excerpt:
+      "Students are training with their houses ahead of the sports programme, with teamwork and fair play at the centre.",
+    category: "Sports",
+    date: "2026-10-05",
+    visual: "students",
+  },
+  {
+    slug: "science-club-activities",
+    title: "Science Club Activities",
+    excerpt:
+      "Members of the science club are working on simple experiments and projects that build curiosity and confidence.",
+    category: "Academics",
+    date: "2026-10-06",
+    visual: "academics",
+  },
+  {
+    slug: "parents-and-teachers-meeting",
+    title: "Parents and Teachers Meeting",
+    excerpt:
+      "Families are invited to meet teachers, review progress and talk about how to support students at home.",
+    category: "Events",
+    date: "2026-10-08",
+    visual: "community",
+  },
 ]

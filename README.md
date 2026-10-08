@@ -21,6 +21,8 @@ A web application for Zion Baptist High School.
 
 ## Current Development Stage
 
+**Step 14 - Public website.** The full public website is built (home, About, Academics, Facilities, Admissions, Student Life, News & Events, Contact, Privacy, Terms) on the existing design system. Photographs are placeholders until the school supplies them: see the header of `src/lib/site-images.ts`. Contact details, social links and unconfirmed admissions information are placeholders (`src/lib/site-config.ts`, and the "To be confirmed" badges). The contact form validates but does not deliver messages yet (`src/lib/services/enquiry.ts`).
+
 **Step 13 - Admin portal.** The public site, the portal gateway, a local PostgreSQL database, authentication, the student dashboard and the **student result viewer** (`/portal/student/results`: term selector, printable result sheet, "Result Upload in Progress" for anything unpublished) are built on the design system ([DESIGN-SYSTEM.md](DESIGN-SYSTEM.md), [ARCHITECTURE.md](ARCHITECTURE.md)). The **teacher portal** (`/portal/teacher`: dashboard, My Classes, and result entry at `/portal/teacher/results` with Save Draft and a confirmed Submit; teachers can never publish) and the **admin portal** (`/portal/admin`: directory pages, result review with complete-result checks and confirmed publish/unpublish, announcements, audit logs) are built too. The student profile and announcements pages and admin editing of students, teachers, classes and academic records are not built yet. Hero image, logo mark, news items and contact details are temporary placeholders (see `src/lib/site-config.ts` and `src/lib/demo/`).
 
 ## Local Database Setup
