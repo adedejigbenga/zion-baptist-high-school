@@ -139,6 +139,7 @@ does not end in `_test`, so the development data is never touched.
 ## Deployment (Vercel)
 
 - **Live site:** https://zion-baptist-high-school.vercel.app (Vercel project `zion-baptist-high-school`).
+- **Commit author matters:** Vercel only accepts deployments whose latest commit is authored by a member of the team. This repo's local git identity is `adedejigbenga <adedejigbenga56@gmail.com>` (the GitHub account's email); a different email gets the deployment "Blocked".
 - **Deploy from this machine:** `npx vercel deploy --prod` (you must be signed in to Vercel; check with `npx vercel whoami`).
 - **Builds need no database.** Vercel runs `npm install` (which runs `prisma generate` through the `postinstall` script) and `next build`.
 - **Sign-in needs a hosted PostgreSQL database.** Until `DATABASE_URL` is set in the Vercel project settings, the live portal shows
