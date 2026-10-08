@@ -628,6 +628,47 @@ inputs serves both layouts (stacked cards on phones, columns from `md`). Submit 
 invisibility); browser suite `teacher-e2e.mjs` covers dashboard numbers, URL tampering, role isolation, validation, live
 preview, draft, submit, student view and 320-1440px layouts.
 
+### 7.4 Admin portal (implemented: `/portal/admin/*`)
+
+**Pages.** Dashboard, Students, Teachers, Classes, Subjects, Academic Sessions (read-only: no delete anywhere), Results (list +
+`/results/review`), Announcements, Audit Logs.
+
+**Authorization.** Every page calls a function in `src/lib/services/admin.ts`, and each of those starts with `requireRole("ADMIN")`
+(session validated in the database; a student or teacher is redirected to their own portal and receives no data). Every write is a
+Server Action in `admin-actions.ts` that calls `requireRole("ADMIN")` BEFORE reading the form, validates the input, and takes the acting
+user from the session (never from the form). The internal write services (`admin-results.ts`, `admin-announcements.ts`) also call
+`isActiveAdmin(userId)` against the database, so a wrongly wired caller cannot publish as a teacher or student; refusals are audited
+(`ADMIN_ACCESS_DENIED`). The browser names records by admission number + term key, class key, subject code, never by result ID.
+Announcement edit/publish forms carry the announcement ID (admin-only, validated, role-checked).
+
+**Completeness (`result-completeness.ts`, pure).** A result may only be published when, for EVERY `ClassSubject` of its class and
+session: an entry exists; EVERY assessment component of the result's grading scheme has a score; the stored total/grade/remark still
+equal what the scores produce under the scheme (and a grade band covers the total); and the teacher has submitted it. Nothing is
+hardcoded: adding a subject to the class or a component to the scheme makes already-submitted results incomplete again. The
+admin sees a plain-language list of what is missing and the Publish button stays disabled, and the server repeats the check inside
+the publishing transaction (a forged request for an incomplete result is refused and audited as `RESULT_PUBLISH_BLOCKED`).
+
+**Publish.** Only `SUBMITTED` results. One transaction: re-evaluate completeness, guarded update (`WHERE status = 'SUBMITTED'`) setting
+`status = PUBLISHED`, `publishedAt`, `publishedById`; insert `ResultPublication(PUBLISHED)`; insert `AuditLog(RESULT_PUBLISHED)` (class,
+term, session, subject count; never marks). Confirmation dialog: "Publish this result?".
+
+**Unpublish.** `PUBLISHED -> SUBMITTED` (a deliberate departure from section 7's "back to DRAFT": the result is still complete and
+every entry stays SUBMITTED/locked for the teachers), clears `publishedAt/By`, inserts `ResultPublication(UNPUBLISHED)` and
+`AuditLog(RESULT_UNPUBLISHED)` with a required reason. No scores are deleted; the student immediately sees "Result Upload in Progress"
+because student queries filter `status = PUBLISHED`. Returning a result to teachers for correction is not built.
+
+**Announcements.** Created as drafts, edited, published/unpublished, optional expiry (end of the chosen day, school time), audience
+whole school or one class. Students read them through `student-dashboard.ts`, which already requires `isPublished`, a started
+`publishedAt`, no expiry, and school-wide or own class. Audit: `ANNOUNCEMENT_CREATED/UPDATED/PUBLISHED/UNPUBLISHED`.
+
+**Audit logs.** `audit-summary.ts` reduces metadata to one line and drops any key that looks like a password, hash, token, secret or
+cookie (so `loginIdHash`, `passwordHash`, token values never reach the page); nested objects are not shown. Raw metadata is never
+passed to the UI. Filters: action, entity type; 20 rows per page.
+
+**Testing.** `admin.test.ts` (37 database tests: completeness, publish/unpublish, non-admin refusal, filters, directory, audit, announcements)
+and the browser suite `admin-e2e.mjs`, which also replays a genuine captured Server Action request as a teacher, a student, an
+anonymous visitor and an admin (for an incomplete result).
+
 ---
 
 ## 8. Academic structure

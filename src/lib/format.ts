@@ -28,3 +28,15 @@ export function initials(firstName: string, lastName: string): string {
 export function formatScore(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")
 }
+
+/** "7 Oct 2026, 14:05", in the school's time zone. */
+export function formatDateTime(date: Date): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: siteConfig.timeZone,
+  }).format(date)
+}

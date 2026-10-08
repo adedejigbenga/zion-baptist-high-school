@@ -21,7 +21,7 @@ A web application for Zion Baptist High School.
 
 ## Current Development Stage
 
-**Step 12 - Teacher portal.** The public site, the portal gateway, a local PostgreSQL database, authentication, the student dashboard and the **student result viewer** (`/portal/student/results`: term selector, printable result sheet, "Result Upload in Progress" for anything unpublished) are built on the design system ([DESIGN-SYSTEM.md](DESIGN-SYSTEM.md), [ARCHITECTURE.md](ARCHITECTURE.md)). The **teacher portal** (`/portal/teacher`: dashboard, My Classes, and result entry at `/portal/teacher/results` with Save Draft and a confirmed Submit; teachers can never publish) is built too. The student profile and announcements pages, the admin portal and result publishing are not built yet. Hero image, logo mark, news items and contact details are temporary placeholders (see `src/lib/site-config.ts` and `src/lib/demo/`).
+**Step 13 - Admin portal.** The public site, the portal gateway, a local PostgreSQL database, authentication, the student dashboard and the **student result viewer** (`/portal/student/results`: term selector, printable result sheet, "Result Upload in Progress" for anything unpublished) are built on the design system ([DESIGN-SYSTEM.md](DESIGN-SYSTEM.md), [ARCHITECTURE.md](ARCHITECTURE.md)). The **teacher portal** (`/portal/teacher`: dashboard, My Classes, and result entry at `/portal/teacher/results` with Save Draft and a confirmed Submit; teachers can never publish) and the **admin portal** (`/portal/admin`: directory pages, result review with complete-result checks and confirmed publish/unpublish, announcements, audit logs) are built too. The student profile and announcements pages and admin editing of students, teachers, classes and academic records are not built yet. Hero image, logo mark, news items and contact details are temporary placeholders (see `src/lib/site-config.ts` and `src/lib/demo/`).
 
 ## Local Database Setup
 
@@ -81,7 +81,7 @@ Shared demo password: `ZionDemo#2026`
 2. Open http://localhost:3000/portal and choose the portal that matches the account, or go straight to
    `/portal/student/login`, `/portal/teacher/login` or `/portal/admin/login`.
 3. Enter the **Login ID** and the shared demo password. You land on a temporary welcome page for that role
-   (`/portal/student` and `/portal/teacher` are real; the admin page is still temporary).
+   (all three portals are real).
 4. **Log out** with the Logout button in the page header. This revokes the session in the database and removes the cookie.
 
 **Student dashboard states** (DEVELOPMENT ONLY demo data; all use the shared demo password):
