@@ -1,19 +1,22 @@
 import type { Metadata } from "next"
 
+import { AddStudentButton } from "@/components/admin/people-forms"
 import { ActiveBadge, EmptyRow, PageHeader, Pagination, SearchBar, toPage, toText } from "@/components/admin/common"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { getStudents } from "@/lib/services/admin"
+import { getPersonOptions, getStudents } from "@/lib/services/admin"
 
 export const metadata: Metadata = { title: "Students" }
 
 export default async function AdminStudentsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams
   const q = toText(params.q)
-  const data = await getStudents(q, toPage(params.page))
+  const [data, options] = await Promise.all([getStudents(q, toPage(params.page)), getPersonOptions()])
 
   return (
     <div className="stack-page">
-      <PageHeader title="Students" description="Every student account, with their class for the current session." />
+      <PageHeader title="Students" description="Every student account, with their class for the current session.">
+        <AddStudentButton classes={options.classes.map((c) => ({ value: c.key, label: c.label }))} />
+      </PageHeader>
       <SearchBar action="/portal/admin/students" query={q} label="Find a student" placeholder="Name or admission number" />
       {data.rows.length === 0 ? (
         <EmptyRow>{q ? `No student matches “${q}”.` : "No students yet."}</EmptyRow>

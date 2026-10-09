@@ -15,6 +15,7 @@ import {
   loadTeachers,
   type AuditFilter,
 } from "@/lib/services/admin-directory"
+import { loadPersonOptions } from "@/lib/services/admin-people"
 import { loadFilterOptions, loadResultList, loadResultReview } from "@/lib/services/admin-results"
 import type { ResultFilters } from "@/types/admin"
 
@@ -77,4 +78,10 @@ export async function getResultReview(admission: string, termKey: string) {
 export async function getAnnouncements() {
   await requireRole("ADMIN")
   return { announcements: await loadAnnouncements(new Date()), targets: await loadTargetOptions() }
+}
+
+/** Class, subject and teacher choices for the add-student / add-teacher / assign forms. */
+export async function getPersonOptions() {
+  await requireRole("ADMIN")
+  return loadPersonOptions()
 }
