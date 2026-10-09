@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRightIcon, ClipboardCheckIcon, LockIcon, MegaphoneIcon, UserRoundIcon, type LucideIcon } from "lucide-react"
+import { ArrowRightIcon, ClipboardCheckIcon, MegaphoneIcon, PhoneIcon, UserRoundIcon, type LucideIcon } from "lucide-react"
 
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
@@ -42,39 +42,30 @@ function QuickActions({ resultAvailable, className }: QuickActionsProps) {
       <h2 id="quick-actions-heading" className="type-card-title text-foreground">
         Quick actions
       </h2>
-      <ul className="grid gap-4 sm:grid-cols-3">
+      <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <li className="flex">
           <div className="w-full">
-            {resultAvailable ? (
-              <ActionLink
-                href="/portal/student/results"
-                icon={ClipboardCheckIcon}
-                title="Check Result"
-                text="Open your published result."
-              />
-            ) : (
-              <Card variant="subtle" size="sm" className="h-full gap-3">
-                <div className="flex flex-col gap-3 px-(--card-spacing)">
-                  <span className="flex size-10 items-center justify-center rounded-lg bg-card text-muted-foreground ring-1 ring-brand-100">
-                    <LockIcon className="size-5" aria-hidden="true" />
-                  </span>
-                  <div className="flex flex-col gap-1">
-                    <h3 className="type-card-title text-foreground">Check Result</h3>
-                    <p className="type-body-sm text-muted-foreground">Available once your result has been published.</p>
-                  </div>
-                </div>
-              </Card>
-            )}
+            <ActionLink
+              href="/portal/student/results"
+              icon={ClipboardCheckIcon}
+              title="View My Results"
+              text={resultAvailable ? "Open your published result." : "See the status of your result."}
+            />
           </div>
         </li>
         <li className="flex">
           <div className="w-full">
-            <ActionLink href="/portal/student/profile" icon={UserRoundIcon} title="View Profile" text="See your student details." />
+            <ActionLink href="/portal/student/profile" icon={UserRoundIcon} title="My Profile" text="See your student details." />
           </div>
         </li>
         <li className="flex">
           <div className="w-full">
             <ActionLink href="/portal/student/announcements" icon={MegaphoneIcon} title="Announcements" text="Read news from the school." />
+          </div>
+        </li>
+        <li className="flex">
+          <div className="w-full">
+            <ActionLink href="/contact" icon={PhoneIcon} title="Contact School" text="Reach the school office." />
           </div>
         </li>
       </ul>

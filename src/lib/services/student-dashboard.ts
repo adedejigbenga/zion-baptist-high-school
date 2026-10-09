@@ -2,7 +2,14 @@ import "server-only"
 
 import { db } from "@/lib/db"
 import { excerpt } from "@/lib/format"
-import type { StudentDashboard, StudentProfileSummary, StudentResultStatus } from "@/types/student"
+import type { Prisma } from "@/generated/prisma/client"
+import type {
+  StudentAnnouncementItem,
+  StudentDashboard,
+  StudentProfile,
+  StudentProfileSummary,
+  StudentResultStatus,
+} from "@/types/student"
 
 /**
  * INTERNAL. Builds the dashboard for ONE student whose ID the caller has already established from the server-side
@@ -14,6 +21,70 @@ import type { StudentDashboard, StudentProfileSummary, StudentResultStatus } fro
  */
 
 const ANNOUNCEMENT_LIMIT = 5
+
+/**
+ * The ONE rule for which announcements a student may see: published, already live, not expired, and either
+ * school-wide or addressed to the student's own class.
+ */
+function visibleAnnouncementsWhere(classId: string | undefined, now: Date): Prisma.AnnouncementWhereInput {
+  return {
+    isPublished: true,
+    AND: [
+      { OR: [{ publishedAt: null }, { publishedAt: { lte: now } }] },
+      { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      { OR: classId ? [{ targetClassId: null }, { targetClassId: classId }] : [{ targetClassId: null }] },
+    ],
+  }
+}
+
+async function currentEnrollment(studentId: string) {
+  const session = await db.academicSession.findFirst({ where: { isCurrent: true }, select: { id: true, name: true } })
+  if (!session) return { session: null, enrollment: null }
+  const enrollment = await db.studentEnrollment.findFirst({
+    where: { studentId, sessionId: session.id, isActive: true },
+    select: { class: { select: { id: true, name: true, section: true } } },
+  })
+  return { session, enrollment }
+}
+
+/** Every announcement this student may see (newest first). Same rule as the dashboard, without the small limit. */
+export async function loadStudentAnnouncements(studentId: string, now: Date): Promise<StudentAnnouncementItem[]> {
+  const { enrollment } = await currentEnrollment(studentId)
+  const rows = await db.announcement.findMany({
+    where: visibleAnnouncementsWhere(enrollment?.class.id, now),
+    orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+    take: 100,
+    select: { title: true, content: true, publishedAt: true, expiresAt: true, targetClass: { select: { name: true } } },
+  })
+  return rows.map((a) => ({
+    title: a.title,
+    content: a.content,
+    publishedAt: a.publishedAt,
+    expiresAt: a.expiresAt,
+    category: a.targetClass ? ("Class" as const) : ("School-wide" as const),
+    className: a.targetClass?.name ?? null,
+  }))
+}
+
+/** The student's own profile. Selects named fields only (never the password hash, sessions or IDs). */
+export async function loadStudentProfile(studentId: string): Promise<StudentProfile | null> {
+  const student = await db.student.findUnique({
+    where: { id: studentId },
+    select: { admissionNumber: true, user: { select: { firstName: true, lastName: true, email: true, phone: true } } },
+  })
+  if (!student) return null
+  const { session, enrollment } = await currentEnrollment(studentId)
+  return {
+    firstName: student.user.firstName,
+    lastName: student.user.lastName,
+    admissionNumber: student.admissionNumber,
+    className: enrollment?.class.name ?? null,
+    section: enrollment?.class.section ?? null,
+    sessionName: session?.name ?? null,
+    email: student.user.email,
+    phone: student.user.phone,
+  }
+}
 
 export async function loadStudentProfileSummary(studentId: string): Promise<StudentProfileSummary | null> {
   const student = await db.student.findUnique({
@@ -64,14 +135,7 @@ export async function loadStudentDashboard(studentId: string, now: Date): Promis
   // 7. Announcements this student may see: published, already live, not expired, school-wide or for their own class.
   const classId = enrollment?.class.id
   const announcements = await db.announcement.findMany({
-    where: {
-      isPublished: true,
-      AND: [
-        { OR: [{ publishedAt: null }, { publishedAt: { lte: now } }] },
-        { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
-        { OR: classId ? [{ targetClassId: null }, { targetClassId: classId }] : [{ targetClassId: null }] },
-      ],
-    },
+    where: visibleAnnouncementsWhere(classId, now),
     orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
     take: ANNOUNCEMENT_LIMIT,
     select: { title: true, content: true, publishedAt: true, targetClass: { select: { name: true } } },

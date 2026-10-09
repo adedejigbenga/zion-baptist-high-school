@@ -5,9 +5,9 @@ import { redirect } from "next/navigation"
 
 import { requireRole } from "@/lib/auth/current-user"
 import { loadStudentResultView } from "@/lib/services/results"
-import { loadStudentDashboard, loadStudentProfileSummary } from "@/lib/services/student-dashboard"
+import { loadStudentAnnouncements, loadStudentDashboard, loadStudentProfile, loadStudentProfileSummary } from "@/lib/services/student-dashboard"
 import type { StudentResultView } from "@/types/results"
-import type { StudentDashboard, StudentProfileSummary } from "@/types/student"
+import type { StudentAnnouncementItem, StudentDashboard, StudentProfile, StudentProfileSummary, StudentResultStatus } from "@/types/student"
 
 /**
  * Student-facing data. NONE of these functions accepts a student ID: the student is always the one who is signed in.
@@ -46,4 +46,24 @@ export const getStudentDashboard = cache(async (): Promise<StudentDashboard> => 
 export const getStudentResultView = cache(async (termKey: string | undefined): Promise<StudentResultView> => {
   const studentId = await currentStudentId()
   return loadStudentResultView(studentId, termKey, new Date())
+})
+
+/** The signed-in student (name + admission number). Same as getStudentProfileSummary; the name the spec uses. */
+export const getCurrentStudent = getStudentProfileSummary
+
+/** The signed-in student's full profile page data. */
+export const getStudentProfile = cache(async (): Promise<StudentProfile> => {
+  const profile = await loadStudentProfile(await currentStudentId())
+  if (!profile) redirect("/portal")
+  return profile
+})
+
+/** All announcements this student may see (school-wide + their own class; published, live, not expired). */
+export const getStudentAnnouncements = cache(async (): Promise<StudentAnnouncementItem[]> => {
+  return loadStudentAnnouncements(await currentStudentId(), new Date())
+})
+
+/** Only the status of the current result (never marks). Shares the dashboard's per-request query. */
+export const getStudentResultStatus = cache(async (): Promise<StudentResultStatus> => {
+  return (await getStudentDashboard()).result
 })

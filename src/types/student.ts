@@ -42,3 +42,30 @@ export type StudentProfileSummary = {
   lastName: string
   admissionNumber: string
 }
+
+/** One announcement in the full list. `category` says who it is addressed to. */
+export type StudentAnnouncementItem = {
+  title: string
+  /** Full text. Plain text: render it as text, never as HTML. */
+  content: string
+  publishedAt: Date | null
+  expiresAt: Date | null
+  category: "School-wide" | "Class"
+  /** The class it is addressed to, or null for a school-wide announcement. */
+  className: string | null
+}
+
+/**
+ * Everything the profile page shows. Deliberately no internal IDs, password hash, session or audit data.
+ * email and phone are the contact details the school holds for the student (often empty).
+ */
+export type StudentProfile = {
+  firstName: string
+  lastName: string
+  admissionNumber: string
+  className: string | null
+  section: string | null
+  sessionName: string | null
+  email: string | null
+  phone: string | null
+}

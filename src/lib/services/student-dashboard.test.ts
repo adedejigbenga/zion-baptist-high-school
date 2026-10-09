@@ -2,7 +2,12 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest"
 
 import type { ResultStatus } from "@/generated/prisma/enums"
 import { db } from "@/lib/db"
-import { loadStudentDashboard, loadStudentProfileSummary } from "@/lib/services/student-dashboard"
+import {
+  loadStudentAnnouncements,
+  loadStudentDashboard,
+  loadStudentProfile,
+  loadStudentProfileSummary,
+} from "@/lib/services/student-dashboard"
 import { resetDatabase } from "@/test/helpers"
 
 const NOW = new Date("2026-10-07T12:00:00.000Z")
@@ -251,5 +256,77 @@ describe("student dashboard: announcements", () => {
     const w = await world()
     const s = await addStudent(w, { admission: "ZBHS/T/001", first: "Daniel", last: "Ade", classId: w.jss1.id })
     expect((await loadStudentDashboard(s.id, NOW))?.announcements).toEqual([])
+  })
+})
+
+describe("student announcements page and profile", () => {
+  async function announce(w: World, title: string, o: { published?: boolean; expires?: Date | null; classId?: string | null } = {}) {
+    return db.announcement.create({
+      data: {
+        title, content: `${title} body`, isPublished: o.published ?? true, publishedAt: days(-3),
+        expiresAt: o.expires ?? null, targetClassId: o.classId ?? null, createdById: w.admin.id,
+      },
+    })
+  }
+
+  it("lists every visible announcement (not just five) with its category, and hides the rest", async () => {
+    const w = await world()
+    const s = await addStudent(w, { admission: "ZBHS/T/001", first: "Daniel", last: "Ade", classId: w.jss1.id })
+    for (let i = 1; i <= 7; i++) await announce(w, `Notice ${i}`)
+    await announce(w, "For JSS 1", { classId: w.jss1.id })
+    await announce(w, "For SS 1", { classId: w.ss1.id })
+    await announce(w, "Unpublished", { published: false })
+    await announce(w, "Expired", { expires: days(-1) })
+
+    const list = await loadStudentAnnouncements(s.id, NOW)
+    expect(list).toHaveLength(8)
+    expect(list.map((a) => a.title)).not.toContain("For SS 1")
+    expect(list.map((a) => a.title)).not.toContain("Unpublished")
+    expect(list.map((a) => a.title)).not.toContain("Expired")
+    expect(list.find((a) => a.title === "For JSS 1")).toMatchObject({ category: "Class", className: "JSS 1" })
+    expect(list.find((a) => a.title === "Notice 1")).toMatchObject({ category: "School-wide", className: null })
+  })
+
+  it("returns the full content, not a shortened excerpt", async () => {
+    const w = await world()
+    const s = await addStudent(w, { admission: "ZBHS/T/001", first: "Daniel", last: "Ade", classId: w.jss1.id })
+    await db.announcement.create({
+      data: { title: "Long", content: "word ".repeat(100).trim(), isPublished: true, publishedAt: days(-1), createdById: w.admin.id },
+    })
+    const [a] = await loadStudentAnnouncements(s.id, NOW)
+    expect(a.content.length).toBe(499)
+  })
+
+  it("shows a student with no class only the school-wide ones", async () => {
+    const w = await world()
+    const s = await addStudent(w, { admission: "ZBHS/T/001", first: "Daniel", last: "Ade", classId: null })
+    await announce(w, "School-wide")
+    await announce(w, "For JSS 1", { classId: w.jss1.id })
+    expect((await loadStudentAnnouncements(s.id, NOW)).map((a) => a.title)).toEqual(["School-wide"])
+  })
+
+  it("profile: returns only this student's own details with class and session, and no internal data", async () => {
+    const w = await world()
+    const s = await addStudent(w, { admission: "ZBHS/T/001", first: "Daniel", last: "Ade", classId: w.jss1.id })
+    await addStudent(w, { admission: "ZBHS/T/002", first: "Grace", last: "Bello", classId: w.jss1.id })
+    await db.user.update({ where: { id: s.userId }, data: { email: "daniel@example.test", phone: "08000000000" } })
+
+    const profile = await loadStudentProfile(s.id)
+    expect(profile).toEqual({
+      firstName: "Daniel", lastName: "Ade", admissionNumber: "ZBHS/T/001", className: "JSS 1", section: null,
+      sessionName: "2026/2027", email: "daniel@example.test", phone: "08000000000",
+    })
+    const text = JSON.stringify(profile)
+    for (const forbidden of ["passwordHash", "Grace", "Bello", s.id, s.userId]) expect(text).not.toContain(forbidden)
+  })
+
+  it("profile: has empty contact details and no class when the school holds none", async () => {
+    const w = await world()
+    const s = await addStudent(w, { admission: "ZBHS/T/001", first: "Daniel", last: "Ade", classId: null })
+    expect(await loadStudentProfile(s.id)).toMatchObject({ className: null, email: null, phone: null })
+  })
+
+  it("profile: returns null for an unknown student ID", async () => {
+    expect(await loadStudentProfile("does-not-exist")).toBeNull()
   })
 })
