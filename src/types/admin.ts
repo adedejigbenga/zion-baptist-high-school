@@ -29,7 +29,7 @@ export type StudentRow = {
   active: boolean
 }
 
-export type TeacherRow = { name: string; employeeNumber: string; department: string | null; active: boolean }
+export type TeacherRow = { name: string; loginId: string; employeeNumber: string; department: string | null; assignmentCount: number; active: boolean }
 export type ClassRow = { name: string; section: string | null; level: number; active: boolean; studentCount: number }
 export type SubjectRow = { name: string; code: string; active: boolean }
 

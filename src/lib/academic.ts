@@ -29,3 +29,8 @@ export function termKey(sessionName: string, termName: TermName): string {
 export function classKey(name: string, section: string | null): string {
   return classLabel(name, section).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
 }
+
+/** A URL-safe reference to an academic session, e.g. "2026-2027". */
+export function sessionKey(sessionName: string): string {
+  return sessionName.replace(/[^A-Za-z0-9]+/g, "-")
+}

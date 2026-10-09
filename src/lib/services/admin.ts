@@ -15,7 +15,7 @@ import {
   loadTeachers,
   type AuditFilter,
 } from "@/lib/services/admin-directory"
-import { loadPersonOptions } from "@/lib/services/admin-people"
+import { loadPersonOptions, loadStudentDetail, loadTeacherDetail } from "@/lib/services/admin-people"
 import { loadFilterOptions, loadResultList, loadResultReview } from "@/lib/services/admin-results"
 import type { ResultFilters } from "@/types/admin"
 
@@ -35,13 +35,13 @@ export async function getAdminOverview() {
   await requireRole("ADMIN")
   return loadAdminOverview()
 }
-export async function getStudents(query: string, page: number) {
+export async function getStudents(query: string, page: number, filters?: { status?: string; classKey?: string }) {
   await requireRole("ADMIN")
-  return loadStudents(query, page)
+  return loadStudents(query, page, filters)
 }
-export async function getTeachers(query: string, page: number) {
+export async function getTeachers(query: string, page: number, filters?: { status?: string }) {
   await requireRole("ADMIN")
-  return loadTeachers(query, page)
+  return loadTeachers(query, page, filters)
 }
 export async function getClasses() {
   await requireRole("ADMIN")
@@ -84,4 +84,14 @@ export async function getAnnouncements() {
 export async function getPersonOptions() {
   await requireRole("ADMIN")
   return loadPersonOptions()
+}
+
+export async function getTeacherDetail(loginId: string) {
+  await requireRole("ADMIN")
+  return loadTeacherDetail(loginId)
+}
+
+export async function getStudentDetail(admissionNumber: string) {
+  await requireRole("ADMIN")
+  return loadStudentDetail(admissionNumber)
 }

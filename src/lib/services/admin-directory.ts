@@ -1,3 +1,4 @@
+import { classKey } from "@/lib/academic"
 import { db } from "@/lib/db"
 import type { Prisma } from "@/generated/prisma/client"
 import { summarizeMetadata } from "@/lib/audit-summary"
@@ -58,11 +59,22 @@ export async function loadAdminOverview(): Promise<AdminOverview> {
   }
 }
 
-export async function loadStudents(query: string, page: number): Promise<Paged<StudentRow>> {
-  const where: Prisma.StudentWhereInput = { AND: nameSearch(query, "admissionNumber") }
+export type DirectoryFilters = { status?: string; classKey?: string }
+
+const activeFilter = (status?: string) => (status === "active" ? { isActive: true } : status === "inactive" ? { isActive: false } : {})
+
+export async function loadStudents(query: string, page: number, filters: DirectoryFilters = {}): Promise<Paged<StudentRow>> {
+  const session = await db.academicSession.findFirst({ where: { isCurrent: true }, select: { id: true, name: true } })
+  let classFilter: Prisma.StudentWhereInput = {}
+  if (filters.classKey && session) {
+    const classes = await db.schoolClass.findMany({ select: { id: true, name: true, section: true } })
+    const match = classes.find((c) => classKey(c.name, c.section) === filters.classKey)
+    // An unknown class key matches nobody (rather than being ignored).
+    classFilter = { enrollments: { some: { sessionId: session.id, isActive: true, classId: match?.id ?? "none" } } }
+  }
+  const where: Prisma.StudentWhereInput = { AND: nameSearch(query, "admissionNumber"), user: activeFilter(filters.status), ...classFilter }
   const total = await db.student.count({ where })
   const current = clampPage(page, total)
-  const session = await db.academicSession.findFirst({ where: { isCurrent: true }, select: { id: true, name: true } })
   const students = await db.student.findMany({
     where,
     orderBy: [{ user: { lastName: "asc" } }, { user: { firstName: "asc" } }],
@@ -92,8 +104,8 @@ export async function loadStudents(query: string, page: number): Promise<Paged<S
   )
 }
 
-export async function loadTeachers(query: string, page: number): Promise<Paged<TeacherRow>> {
-  const where: Prisma.TeacherWhereInput = { AND: nameSearch(query, "employeeNumber") }
+export async function loadTeachers(query: string, page: number, filters: DirectoryFilters = {}): Promise<Paged<TeacherRow>> {
+  const where: Prisma.TeacherWhereInput = { AND: nameSearch(query, "employeeNumber"), user: activeFilter(filters.status) }
   const total = await db.teacher.count({ where })
   const current = clampPage(page, total)
   const teachers = await db.teacher.findMany({
@@ -101,13 +113,15 @@ export async function loadTeachers(query: string, page: number): Promise<Paged<T
     orderBy: [{ user: { lastName: "asc" } }, { user: { firstName: "asc" } }],
     skip: (current - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
-    select: { employeeNumber: true, department: true, user: { select: { firstName: true, lastName: true, isActive: true } } },
+    select: { employeeNumber: true, department: true, user: { select: { loginId: true, firstName: true, lastName: true, isActive: true } }, _count: { select: { assignments: true } } },
   })
   return paged(
     teachers.map((t) => ({
       name: `${t.user.firstName} ${t.user.lastName}`,
+      loginId: t.user.loginId,
       employeeNumber: t.employeeNumber,
       department: t.department,
+      assignmentCount: t._count.assignments,
       active: t.user.isActive,
     })),
     total,
