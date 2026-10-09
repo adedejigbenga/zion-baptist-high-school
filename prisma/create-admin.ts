@@ -1,5 +1,5 @@
 /**
- * Creates the FIRST administrator on a (hosted) database. This is the safe way to bootstrap a real or preview
+ * Creates ONE account (ADMIN by default; set ACCOUNT_ROLE=TEACHER or STUDENT) on a (hosted) database. This is the safe way to bootstrap a real or preview
  * deployment: it never loads demo data and never uses the shared development password.
  *
  *   ADMIN_LOGIN_ID=admin ADMIN_PASSWORD='<your own, 12+ characters>' npx tsx prisma/create-admin.ts
@@ -20,6 +20,8 @@ try {
 
 const loginId = process.env.ADMIN_LOGIN_ID?.trim()
 const password = process.env.ADMIN_PASSWORD ?? ""
+const accountRole = (process.env.ACCOUNT_ROLE ?? "ADMIN").toUpperCase()
+if (!["ADMIN", "TEACHER", "STUDENT"].includes(accountRole)) throw new Error("ACCOUNT_ROLE must be ADMIN, TEACHER or STUDENT.")
 const firstName = process.env.ADMIN_FIRST_NAME?.trim() || "School"
 const lastName = process.env.ADMIN_LAST_NAME?.trim() || "Administrator"
 
@@ -36,10 +38,12 @@ async function main() {
 
   const passwordHash = await hash(password, { memoryCost: 19456, timeCost: 2, parallelism: 1 })
   const user = await prisma.user.create({
-    data: { loginId: loginId!, passwordHash, role: Role.ADMIN, firstName, lastName, isActive: true },
+    data: { loginId: loginId!, passwordHash, role: Role[accountRole as keyof typeof Role], firstName, lastName, isActive: true },
   })
-  await prisma.admin.create({ data: { userId: user.id } })
-  console.log(`Created administrator "${loginId}".`)
+  if (accountRole === "ADMIN") await prisma.admin.create({ data: { userId: user.id } })
+  if (accountRole === "TEACHER") await prisma.teacher.create({ data: { userId: user.id, employeeNumber: loginId! } })
+  if (accountRole === "STUDENT") await prisma.student.create({ data: { userId: user.id, admissionNumber: loginId! } })
+  console.log(`Created ${accountRole.toLowerCase()} account "${loginId}".`)
 }
 
 main()
