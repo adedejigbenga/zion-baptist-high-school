@@ -1,11 +1,14 @@
 import type { Metadata } from "next"
 import { BookOpenIcon, CheckCircle2Icon, ClockIcon, PencilLineIcon, UsersIcon, type LucideIcon } from "lucide-react"
 
+import Link from "next/link"
+
+import { AnnouncementList } from "@/components/student/announcement-list"
 import { AssignmentsList } from "@/components/teacher/assignments-list"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { TERM_LABEL } from "@/lib/academic"
-import { getTeacherOverview, getTeacherProfileSummary } from "@/lib/services/teacher"
+import { getTeacherAnnouncements, getTeacherOverview, getTeacherProfileSummary } from "@/lib/services/teacher"
 
 export const metadata: Metadata = { title: "Teacher Dashboard" }
 
@@ -29,7 +32,7 @@ function StatCard({ label, value, icon: Icon, hint }: { label: string; value: nu
 }
 
 export default async function TeacherDashboardPage() {
-  const [profile, overview] = await Promise.all([getTeacherProfileSummary(), getTeacherOverview()])
+  const [profile, overview, announcements] = await Promise.all([getTeacherProfileSummary(), getTeacherOverview(), getTeacherAnnouncements(3)])
   const { totals } = overview
 
   return (
@@ -63,6 +66,18 @@ export default async function TeacherDashboardPage() {
             publishes them.
           </p>
         )}
+      </section>
+
+      <section className="flex flex-col gap-4" aria-labelledby="teacher-announcements-heading">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="teacher-announcements-heading" className="type-section-title text-foreground">
+            Announcements
+          </h2>
+          <Link href="/portal/teacher/announcements" className="type-label text-primary hover:underline">
+            View all
+          </Link>
+        </div>
+        <AnnouncementList announcements={announcements} now={new Date()} />
       </section>
     </div>
   )

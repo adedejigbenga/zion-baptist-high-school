@@ -4,7 +4,9 @@ import { cache } from "react"
 import { redirect } from "next/navigation"
 
 import { requireRole } from "@/lib/auth/current-user"
+import { loadTeacherAnnouncements } from "@/lib/services/teacher-announcements"
 import { loadTeacherOverview, loadTeacherProfileSummary, loadWorkspace } from "@/lib/services/teacher-workspace"
+import type { StudentAnnouncementItem } from "@/types/student"
 import type { TeacherOverview, TeacherWorkspace } from "@/types/teacher"
 
 /**
@@ -44,3 +46,9 @@ export const getTeacherWorkspace = cache(
     return loadWorkspace(actor, { classKey, subjectCode, query })
   },
 )
+
+/** Read-only announcements for the signed-in teacher (school-wide plus their own classes). `limit` caps the list. */
+export const getTeacherAnnouncements = cache(async (limit?: number): Promise<StudentAnnouncementItem[]> => {
+  const { teacherId } = await currentTeacher()
+  return loadTeacherAnnouncements(teacherId, new Date(), limit)
+})
