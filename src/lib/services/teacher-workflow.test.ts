@@ -129,8 +129,8 @@ describe("submission rules", () => {
 describe("admin return for correction", () => {
   async function submittedClass(w: Awaited<ReturnType<typeof world>>) {
     // JSS 1 offers MTH and ENG: both teachers submit for Daniel, so his result becomes SUBMITTED.
-    await saveSubjectResults(w.maths.actor, { classKey: "jss-1", subjectCode: "MTH", intent: "submit", cells: cells("ZBHS/T/001", "30", "50") })
-    await saveSubjectResults(w.english.actor, { classKey: "jss-1", subjectCode: "ENG", intent: "submit", cells: cells("ZBHS/T/001", "35", "55") })
+    await saveSubjectResults(w.maths.actor, { classKey: "jss-1", subjectCode: "MTH", intent: "submit", cells: { ...cells("ZBHS/T/001", "30", "50"), ...cells("ZBHS/T/002", "20", "40") } })
+    await saveSubjectResults(w.english.actor, { classKey: "jss-1", subjectCode: "ENG", intent: "submit", cells: { ...cells("ZBHS/T/001", "35", "55"), ...cells("ZBHS/T/002", "25", "45") } })
     return db.result.findFirstOrThrow({ where: { studentId: w.daniel.id } })
   }
   const req = (reason = "Please recheck the exam mark") => ({ admission: "ZBHS/T/001", termKey: "2026-2027-first", subjectCode: "MTH", reason })
@@ -162,8 +162,7 @@ describe("admin return for correction", () => {
     expect(await returnForCorrection({ userId: w.admin.id }, req(" "))).toMatchObject({ ok: false, code: "INVALID" })
     expect((await db.result.findFirstOrThrow({ where: { studentId: w.daniel.id } })).status).toBe("SUBMITTED")
 
-    expect(await publishResult({ userId: w.admin.id }, { admission: "ZBHS/T/001", termKey: "2026-2027-first" })).toMatchObject({ ok: false }) // other subjects missing
-    await db.result.updateMany({ where: { studentId: w.daniel.id }, data: { status: "PUBLISHED", publishedAt: new Date(), publishedById: w.admin.id } })
+    expect(await publishResult({ userId: w.admin.id }, { admission: "ZBHS/T/001", termKey: "2026-2027-first" })).toMatchObject({ ok: true })
     expect(await returnForCorrection({ userId: w.admin.id }, req())).toMatchObject({ ok: false, code: "NOT_READY" })
 
     await db.result.updateMany({ where: { studentId: w.daniel.id }, data: { status: "SUBMITTED", publishedAt: null, publishedById: null } })
