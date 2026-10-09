@@ -25,7 +25,7 @@ const items: { href: string; label: string; icon: LucideIcon; exact?: boolean }[
   { href: "/portal/admin/teachers", label: "Teachers", icon: UserRoundCogIcon },
   { href: "/portal/admin/classes", label: "Classes", icon: SchoolIcon },
   { href: "/portal/admin/subjects", label: "Subjects", icon: BookOpenIcon },
-  { href: "/portal/admin/academics", label: "Academic Sessions", icon: CalendarRangeIcon },
+  { href: "/portal/admin/academic-sessions", label: "Academic Sessions", icon: CalendarRangeIcon },
   { href: "/portal/admin/results", label: "Results", icon: ClipboardListIcon },
   { href: "/portal/admin/announcements", label: "Announcements", icon: MegaphoneIcon },
   { href: "/portal/admin/audit-logs", label: "Audit Logs", icon: ScrollTextIcon },

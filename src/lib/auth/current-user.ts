@@ -1,10 +1,10 @@
 import "server-only"
 
 import { cache } from "react"
-import { redirect } from "next/navigation"
+import { forbidden, redirect } from "next/navigation"
 
 import type { Role } from "@/generated/prisma/enums"
-import { ROLE_HOME, ROLE_LOGIN_PATH, SESSION_ENDED_PATH } from "@/lib/auth/config"
+import { ROLE_LOGIN_PATH, SESSION_ENDED_PATH } from "@/lib/auth/config"
 import { readSessionToken } from "@/lib/auth/cookies"
 import { validateSessionToken } from "@/lib/auth/service"
 import type { SessionUser } from "@/types/auth"
@@ -43,12 +43,12 @@ export async function requireUser(): Promise<SessionUser> {
 
 /**
  * Use at the top of every protected page, Server Action and data function: returns the user only if they hold
- * `role`. Not signed in -> that role's sign-in page. Signed in as another role -> access denied, back to their own home.
+ * `role`. Not signed in -> that role's sign-in page. Signed in as another role -> Access Denied (403 page; the status is 403 when it is decided before streaming starts).
  * Layouts must not be the only check: they do not re-run on client-side navigation.
  */
 export async function requireRole<R extends Role>(role: R): Promise<SessionUser & { role: R }> {
   const { user, hadCookie } = await getSessionState()
   if (!user) signInRedirect(ROLE_LOGIN_PATH[role], hadCookie)
-  if (user.role !== role) redirect(ROLE_HOME[user.role])
+  if (user.role !== role) forbidden()
   return user as SessionUser & { role: R }
 }

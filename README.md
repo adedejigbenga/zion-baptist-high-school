@@ -161,3 +161,8 @@ Open http://localhost:3000.
 
 
 
+
+## Wrong-role access and hosted accounts
+
+- A signed-in user who opens another role's portal area (for example a student opening `/portal/admin`) sees an **Access Denied** page (`src/app/forbidden.tsx`), not a redirect. It is enforced by `requireRole()` on every page and Server Action. Next.js answers with HTTP 403 when the decision is made before streaming starts; inside a streamed portal page the status stays 200 but the denied page is what renders and no data is sent.
+- The demo seed refuses to run against a hosted database. To create real accounts on a hosted database use `prisma/create-admin.ts` (`ACCOUNT_ROLE=ADMIN|TEACHER|STUDENT`, with your own password in `ADMIN_PASSWORD`). Never use the shared development password there.
