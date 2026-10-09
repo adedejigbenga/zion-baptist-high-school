@@ -49,6 +49,37 @@ export default async function AdminDashboardPage() {
         <StatCard label="Published Results" value={overview.publishedResults} icon={EyeIcon} href="/portal/admin/results?status=PUBLISHED" hint="Visible to students" />
       </section>
 
+      <Card className="gap-0" data-testid="review-queue">
+        <CardHeader className="flex flex-row items-center justify-between gap-3 pb-4">
+          <h2 className="type-card-title text-foreground">Waiting for your review</h2>
+          <Link href="/portal/admin/results?status=SUBMITTED" className="inline-flex items-center gap-1.5 rounded-sm type-label text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+            All submitted results
+            <ArrowRightIcon className="size-4" aria-hidden="true" />
+          </Link>
+        </CardHeader>
+        <CardContent>
+          {overview.awaiting.length === 0 ? (
+            <p className="type-body-sm text-muted-foreground">Nothing is waiting. Results appear here when teachers have submitted every subject.</p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-border">
+              {overview.awaiting.map((r) => (
+                <li key={`${r.admissionNumber}:${r.termKey}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+                  <ClipboardCheckIcon className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                  <Link
+                    href={`/portal/admin/results/review?${new URLSearchParams({ student: r.admissionNumber, term: r.termKey })}`}
+                    className="type-label text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    {r.studentName}<span className="sr-only">, review result</span>
+                  </Link>
+                  <Badge variant="secondary">{r.className}</Badge>
+                  <span className="type-caption font-normal text-muted-foreground">{r.termLabel} · submitted {formatDate(r.submittedAt)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
       <Card className="gap-0">
         <CardHeader className="flex flex-row items-center justify-between gap-3 pb-4">
           <h2 className="type-card-title text-foreground">Recent announcements</h2>

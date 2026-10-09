@@ -67,6 +67,14 @@ function AnnouncementDialog({ announcement, targets, trigger, triggerLabel }: { 
                 </NativeSelect>
                 {err.target && <p className="type-caption font-normal text-destructive">{err.target}</p>}
               </div>
+              {(!announcement || announcement.state === "DRAFT" || announcement.state === "SCHEDULED") && (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor={`a-publish-${idp}`}>Publish on (optional)</Label>
+                  <Input id={`a-publish-${idp}`} name="publishOn" type="date" defaultValue={dateInput(announcement?.publishedAt ?? null)} aria-invalid={err.publishOn ? true : undefined} />
+                  <p className="type-caption font-normal text-muted-foreground">Leave empty to go live the moment you press Publish.</p>
+                  {err.publishOn && <p className="type-caption font-normal text-destructive">{err.publishOn}</p>}
+                </div>
+              )}
               <div className="flex flex-col gap-2">
                 <Label htmlFor={`a-expires-${idp}`}>Expiry date (optional)</Label>
                 <Input id={`a-expires-${idp}`} name="expires" type="date" defaultValue={dateInput(announcement?.expiresAt ?? null)} aria-invalid={err.expires ? true : undefined} />
@@ -102,7 +110,7 @@ function PublishToggle({ announcement }: { announcement: AnnouncementRow }) {
   )
 }
 
-function AnnouncementsManager({ announcements, targets }: { announcements: AnnouncementRow[]; targets: Target[] }) {
+function AnnouncementsManager({ announcements, targets, filtered = false }: { announcements: AnnouncementRow[]; targets: Target[]; filtered?: boolean }) {
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -112,8 +120,8 @@ function AnnouncementsManager({ announcements, targets }: { announcements: Annou
         <Card variant="subtle">
           <CardContent className="flex flex-col items-center gap-3 py-6 text-center">
             <MegaphoneIcon className="size-8 text-primary" aria-hidden="true" />
-            <p className="type-label text-foreground">No announcements yet</p>
-            <p className="max-w-sm type-body-sm text-muted-foreground">Create one to share news with the whole school or a single class.</p>
+            <p className="type-label text-foreground">{filtered ? "Nothing found" : "No announcements yet"}</p>
+            <p className="max-w-sm type-body-sm text-muted-foreground">{filtered ? "No announcement matches these filters." : "Create one to share news with the whole school or a single class."}</p>
           </CardContent>
         </Card>
       ) : (
@@ -129,6 +137,7 @@ function AnnouncementsManager({ announcements, targets }: { announcements: Annou
                   <p className="line-clamp-3 type-body-sm text-muted-foreground">{a.content}</p>
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="secondary">{a.targetLabel}</Badge>
+                    {a.publishedAt && (a.state === "DRAFT" || a.state === "SCHEDULED") && <Badge variant="info">{a.state === "SCHEDULED" ? "Goes live" : "Planned for"} {formatDate(a.publishedAt)}</Badge>}
                     {a.expiresAt && <Badge variant="neutral">Expires {formatDate(a.expiresAt)}</Badge>}
                     <span className="type-caption font-normal text-muted-foreground">By {a.createdBy}</span>
                   </div>

@@ -78,9 +78,9 @@ export async function getResultReview(admission: string, termKey: string) {
   await requireRole("ADMIN")
   return loadResultReview(admission, termKey)
 }
-export async function getAnnouncements() {
+export async function getAnnouncements(filters: { q?: string; state?: string; target?: string } = {}) {
   await requireRole("ADMIN")
-  return { announcements: await loadAnnouncements(new Date()), targets: await loadTargetOptions() }
+  return { announcements: await loadAnnouncements(new Date(), filters), targets: await loadTargetOptions() }
 }
 
 /** Class, subject and teacher choices for the add-student / add-teacher / assign forms. */

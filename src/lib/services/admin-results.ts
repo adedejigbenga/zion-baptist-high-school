@@ -41,16 +41,18 @@ const sessionKey = (name: string) => name.replace(/[^A-Za-z0-9]+/g, "-")
 // ---------------------------------------------------------------------------------------------------------
 
 export async function loadFilterOptions(): Promise<FilterOptions & { currentSession: string | null; currentTerm: string | null }> {
-  const [sessions, classes, subjects, currentTerm] = await Promise.all([
+  const [sessions, classes, subjects, currentTerm, teacherUsers] = await Promise.all([
     db.academicSession.findMany({ orderBy: { startDate: "desc" }, select: { name: true, isCurrent: true } }),
     db.schoolClass.findMany({ orderBy: [{ level: "asc" }, { name: "asc" }, { section: "asc" }], select: { name: true, section: true } }),
     db.subject.findMany({ orderBy: { name: "asc" }, select: { code: true, name: true } }),
     db.term.findFirst({ where: { isCurrent: true }, select: { name: true } }),
+    db.user.findMany({ where: { role: "TEACHER", teacher: { isNot: null } }, orderBy: [{ lastName: "asc" }, { firstName: "asc" }], select: { loginId: true, firstName: true, lastName: true } }),
   ])
   return {
     sessions: sessions.map((s) => ({ key: sessionKey(s.name), name: s.name })),
     classes: classes.map((c) => ({ key: classKey(c.name, c.section), label: classLabel(c.name, c.section) })),
     subjects,
+    teachers: teacherUsers.map((t) => ({ loginId: t.loginId, name: `${t.firstName} ${t.lastName}` })),
     currentSession: sessions.find((s) => s.isCurrent) ? sessionKey(sessions.find((s) => s.isCurrent)!.name) : null,
     currentTerm: currentTerm ? currentTerm.name.toLowerCase() : null,
   }
@@ -71,7 +73,15 @@ export async function loadResultList(filters: ResultFilters): Promise<ResultList
     const classes = await db.schoolClass.findMany({ select: { id: true, name: true, section: true } })
     where.classId = classes.find((c) => classKey(c.name, c.section) === filters.classKey)?.id ?? "none"
   }
-  if (filters.subject) where.entries = { some: { subject: { code: filters.subject } } }
+  const entryFilters: Prisma.ResultEntryWhereInput[] = []
+  if (filters.subject) entryFilters.push({ subject: { code: filters.subject } })
+  if (filters.teacher) {
+    // "Teacher where applicable": results of classes this teacher teaches this session, that have an entry in one of their subjects.
+    const mine = { teacher: { user: { loginId: filters.teacher } }, sessionId: where.sessionId as string }
+    where.class = { teacherAssignments: { some: mine } }
+    entryFilters.push({ subject: { teacherAssignments: { some: mine } } })
+  }
+  if (entryFilters.length > 0) where.entries = { some: { AND: entryFilters } }
 
   const found = await db.result.findMany({
     where,
@@ -83,8 +93,13 @@ export async function loadResultList(filters: ResultFilters): Promise<ResultList
       student: { select: { admissionNumber: true, user: { select: { firstName: true, lastName: true } } } },
       class: { select: { name: true, section: true, level: true } },
       term: { select: { name: true, session: { select: { name: true } } } },
-      entries: { select: { status: true } },
+      entries: { select: { status: true, updatedAt: true, subject: { select: { code: true } } } },
     },
+  })
+
+  const assignments = await db.teacherAssignment.findMany({
+    where: { sessionId: where.sessionId as string },
+    select: { classId: true, subject: { select: { code: true } }, teacher: { select: { user: { select: { firstName: true, lastName: true } } } } },
   })
 
   const required = await db.classSubject.groupBy({ by: ["classId", "sessionId"], _count: { _all: true } })
@@ -114,6 +129,15 @@ export async function loadResultList(filters: ResultFilters): Promise<ResultList
     submittedSubjects: r.entries.filter((e) => e.status === "SUBMITTED").length,
     requiredSubjects: requiredFor(r.classId, r.sessionId),
     publishedAt: r.publishedAt,
+    submittedAt: r.entries.filter((e) => e.status === "SUBMITTED").reduce<Date | null>((latest, e) => (latest === null || e.updatedAt > latest ? e.updatedAt : latest), null),
+    subjectStatus: filters.subject ? (r.entries.find((e) => e.subject.code === filters.subject)?.status ?? "MISSING") : null,
+    teachers: [
+      ...new Set(
+        assignments
+          .filter((a) => a.classId === r.classId && (!filters.subject || a.subject.code === filters.subject))
+          .map((a) => `${a.teacher.user.firstName} ${a.teacher.user.lastName}`),
+      ),
+    ],
   }))
 
   return { rows, total: shown.length, page, pageCount, pageSize: PAGE_SIZE, filters: { ...filters, page }, counts }
@@ -185,6 +209,20 @@ export async function loadResultReview(admission: string, key: string): Promise<
     take: 10,
     select: { action: true, publishedAt: true, publishedBy: { select: { firstName: true, lastName: true } } },
   })
+  const [assigned, entryTimes] = await Promise.all([
+    db.teacherAssignment.findMany({
+      where: { classId: result.classId, sessionId: result.sessionId },
+      select: { subject: { select: { code: true } }, teacher: { select: { user: { select: { firstName: true, lastName: true } } } } },
+    }),
+    db.resultEntry.findMany({ where: { resultId: result.id, status: "SUBMITTED" }, select: { updatedAt: true, subject: { select: { code: true } } } }),
+  ])
+  const subjectMeta: ResultReview["subjectMeta"] = {}
+  for (const sub of completeness.subjects) {
+    subjectMeta[sub.code] = {
+      teachers: assigned.filter((a) => a.subject.code === sub.code).map((a) => `${a.teacher.user.firstName} ${a.teacher.user.lastName}`),
+      submittedAt: entryTimes.find((e) => e.subject.code === sub.code)?.updatedAt ?? null,
+    }
+  }
   const totals = completeness.subjects.map((s) => s.total)
   const allTotals = completeness.subjects.length > 0 && totals.every((t): t is number => t !== null)
   const sum = allTotals ? Math.round((totals as number[]).reduce((a, b) => a + b, 0) * 100) / 100 : 0
@@ -202,6 +240,7 @@ export async function loadResultReview(admission: string, key: string): Promise<
     completeness,
     overall: allTotals ? { total: sum, average: Math.round((sum / totals.length) * 100) / 100 } : null,
     history: history.map((h) => ({ action: h.action, at: h.publishedAt, by: `${h.publishedBy.firstName} ${h.publishedBy.lastName}` })),
+    subjectMeta,
   }
 }
 

@@ -18,6 +18,8 @@ export type AdminOverview = {
   activeClasses: number
   totalSubjects: number
   awaitingPublication: number
+  /** The oldest-waiting submitted results, for the dashboard queue. */
+  awaiting: { studentName: string; admissionNumber: string; className: string; termKey: string; termLabel: string; submittedAt: Date }[]
   publishedResults: number
   recentAnnouncements: { title: string; target: string; published: boolean; updatedAt: Date }[]
   recent: AuditRow[]
@@ -65,6 +67,8 @@ export type ResultFilters = {
   term: string
   classKey: string
   subject: string
+  /** Login ID of a teacher, or empty. */
+  teacher?: string
   /** "ALL" | ResultStatus */
   status: string
   page: number
@@ -74,6 +78,7 @@ export type FilterOptions = {
   sessions: { key: string; name: string }[]
   classes: { key: string; label: string }[]
   subjects: { code: string; name: string }[]
+  teachers: { loginId: string; name: string }[]
 }
 
 export type AdminResultRow = {
@@ -87,6 +92,12 @@ export type AdminResultRow = {
   submittedSubjects: number
   requiredSubjects: number
   publishedAt: Date | null
+  /** When the latest submitted subject was submitted (null when nothing is submitted). */
+  submittedAt: Date | null
+  /** With a subject filter: that subject's entry status; otherwise null. */
+  subjectStatus: "MISSING" | "DRAFT" | "SUBMITTED" | null
+  /** The teachers assigned to the filtered subject (or all of the class's teachers). */
+  teachers: string[]
 }
 
 export type ResultList = Paged<AdminResultRow> & {
@@ -108,6 +119,8 @@ export type ResultReview = {
   /** Sum and average of the subject totals, only when every subject has one. */
   overall: { total: number; average: number } | null
   history: { action: "PUBLISHED" | "UNPUBLISHED"; at: Date; by: string }[]
+  /** Per subject code: who teaches it to this class and when it was submitted. */
+  subjectMeta: Record<string, { teachers: string[]; submittedAt: Date | null }>
 }
 
 export type AnnouncementRow = {

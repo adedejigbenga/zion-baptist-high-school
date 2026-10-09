@@ -80,7 +80,9 @@ export default async function AdminResultReviewPage({ searchParams }: { searchPa
                   <TableHead>Total</TableHead>
                   <TableHead>Grade</TableHead>
                   <TableHead className="hidden md:table-cell">Remark</TableHead>
-                  <TableHead>Teacher</TableHead>
+                  <TableHead>Entry</TableHead>
+                  <TableHead className="hidden lg:table-cell">Teacher</TableHead>
+                  <TableHead className="hidden lg:table-cell">Submitted</TableHead>
                   {status !== "PUBLISHED" && <TableHead><span className="sr-only">Actions</span></TableHead>}
                 </TableRow>
               </TableHeader>
@@ -98,6 +100,8 @@ export default async function AdminResultReviewPage({ searchParams }: { searchPa
                     <TableCell>
                       {s.entryStatus === "SUBMITTED" ? <Badge variant="info">Submitted</Badge> : s.entryStatus === "DRAFT" ? <Badge variant="warning">Draft</Badge> : <Badge variant="destructive">Missing</Badge>}
                     </TableCell>
+                    <TableCell className="hidden lg:table-cell type-body-sm">{review.subjectMeta[s.code]?.teachers.join(", ") || "–"}</TableCell>
+                    <TableCell className="hidden lg:table-cell whitespace-nowrap type-body-sm">{review.subjectMeta[s.code]?.submittedAt ? formatDateTime(review.subjectMeta[s.code].submittedAt as Date) : "–"}</TableCell>
                     {status !== "PUBLISHED" && (
                       <TableCell>
                         {s.entryStatus !== "MISSING" && (

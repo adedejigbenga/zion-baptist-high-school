@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { NativeSelect } from "@/components/ui/native-select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { formatDateTime } from "@/lib/format"
 import { getResultFilterOptions, getResultList } from "@/lib/services/admin"
 
 export const metadata: Metadata = { title: "Result Administration" }
@@ -27,11 +28,12 @@ export default async function AdminResultsPage({ searchParams }: { searchParams:
   const term = toText(params.term, 10) || options.currentTerm || "all"
   const classKey = toText(params.class, 40)
   const subject = toText(params.subject, 20)
+  const teacher = toText(params.teacher, 40)
   const requestedStatus = toText(params.status, 12)
   const status = (STATUSES as readonly string[]).includes(requestedStatus) ? requestedStatus : "ALL"
 
-  const list = await getResultList({ session, term, classKey, subject, status, page: toPage(params.page) })
-  const keep = { session, term, class: classKey, subject, status }
+  const list = await getResultList({ session, term, classKey, subject, teacher, status, page: toPage(params.page) })
+  const keep = { session, term, class: classKey, subject, teacher, status }
 
   return (
     <div className="stack-page">
@@ -41,7 +43,7 @@ export default async function AdminResultsPage({ searchParams }: { searchParams:
         <Badge variant="success">Published: {list.counts.PUBLISHED}</Badge>
       </PageHeader>
 
-      <Form action="/portal/admin/results" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[repeat(5,minmax(0,1fr))_auto] xl:items-end">
+      <Form action="/portal/admin/results" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[repeat(6,minmax(0,1fr))_auto] xl:items-end">
         <div className="flex flex-col gap-2">
           <Label htmlFor="f-session">Session</Label>
           <NativeSelect id="f-session" name="session" defaultValue={session}>
@@ -72,6 +74,13 @@ export default async function AdminResultsPage({ searchParams }: { searchParams:
           </NativeSelect>
         </div>
         <div className="flex flex-col gap-2">
+          <Label htmlFor="f-teacher">Teacher</Label>
+          <NativeSelect id="f-teacher" name="teacher" defaultValue={teacher}>
+            <option value="">All teachers</option>
+            {options.teachers.map((t) => <option key={t.loginId} value={t.loginId}>{t.name}</option>)}
+          </NativeSelect>
+        </div>
+        <div className="flex flex-col gap-2">
           <Label htmlFor="f-status">Status</Label>
           <NativeSelect id="f-status" name="status" defaultValue={status}>
             {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
@@ -91,7 +100,9 @@ export default async function AdminResultsPage({ searchParams }: { searchParams:
               <TableHead>Class</TableHead>
               <TableHead className="hidden lg:table-cell">Term</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="hidden sm:table-cell">Subjects submitted</TableHead>
+              <TableHead className="hidden sm:table-cell">{subject ? "Subject entry" : "Subjects submitted"}</TableHead>
+              <TableHead className="hidden xl:table-cell">Teacher</TableHead>
+              <TableHead className="hidden lg:table-cell">Submitted</TableHead>
               <TableHead className="text-right"><span className="sr-only">Actions</span></TableHead>
             </TableRow>
           </TableHeader>
@@ -111,7 +122,11 @@ export default async function AdminResultsPage({ searchParams }: { searchParams:
                 <TableCell>{r.className}</TableCell>
                 <TableCell className="hidden lg:table-cell">{r.termLabel}</TableCell>
                 <TableCell><ResultStatusBadge status={r.status} /></TableCell>
-                <TableCell className="hidden sm:table-cell">{r.submittedSubjects} of {r.requiredSubjects}</TableCell>
+                <TableCell className="hidden sm:table-cell">
+                  {r.subjectStatus ? (r.subjectStatus === "SUBMITTED" ? "Submitted" : r.subjectStatus === "DRAFT" ? "Draft" : "Not entered") : `${r.submittedSubjects} of ${r.requiredSubjects}`}
+                </TableCell>
+                <TableCell className="hidden xl:table-cell type-body-sm">{r.teachers.length > 0 ? r.teachers.join(", ") : "–"}</TableCell>
+                <TableCell className="hidden lg:table-cell whitespace-nowrap type-body-sm">{r.submittedAt ? formatDateTime(r.submittedAt) : "–"}</TableCell>
                 <TableCell className="text-right">
                   <Link
                     href={`/portal/admin/results/review?${new URLSearchParams({ student: r.admissionNumber, term: r.termKey })}`}

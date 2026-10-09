@@ -1,4 +1,4 @@
-import { classKey } from "@/lib/academic"
+import { classKey, termKey, termLabel } from "@/lib/academic"
 import { db } from "@/lib/db"
 import type { Prisma } from "@/generated/prisma/client"
 import { summarizeMetadata } from "@/lib/audit-summary"
@@ -41,7 +41,7 @@ function nameSearch(query: string, idField: "admissionNumber" | "employeeNumber"
 export async function loadAdminOverview(): Promise<AdminOverview> {
   const session = await db.academicSession.findFirst({ where: { isCurrent: true }, select: { name: true } })
   const term = await db.term.findFirst({ where: { isCurrent: true }, select: { name: true } })
-  const [totalStudents, totalTeachers, activeClasses, totalSubjects, awaitingPublication, publishedResults, announcements, recent] = await Promise.all([
+  const [totalStudents, totalTeachers, activeClasses, totalSubjects, awaitingPublication, publishedResults, announcements, awaiting, recent] = await Promise.all([
     db.student.count({ where: { user: { isActive: true } } }),
     db.teacher.count({ where: { user: { isActive: true } } }),
     db.schoolClass.count({ where: { isActive: true } }),
@@ -49,6 +49,17 @@ export async function loadAdminOverview(): Promise<AdminOverview> {
     db.result.count({ where: { status: "SUBMITTED" } }),
     db.result.count({ where: { status: "PUBLISHED" } }),
     db.announcement.findMany({ orderBy: { updatedAt: "desc" }, take: 4, select: { title: true, isPublished: true, updatedAt: true, targetClass: { select: { name: true, section: true } } } }),
+    db.result.findMany({
+      where: { status: "SUBMITTED" },
+      orderBy: { updatedAt: "asc" },
+      take: 5,
+      select: {
+        updatedAt: true,
+        student: { select: { admissionNumber: true, user: { select: { firstName: true, lastName: true } } } },
+        class: { select: { name: true, section: true } },
+        term: { select: { name: true, session: { select: { name: true } } } },
+      },
+    }),
     loadAuditLogs({ page: 1, action: "", entityType: "" }, 6),
   ])
   return {
@@ -60,6 +71,14 @@ export async function loadAdminOverview(): Promise<AdminOverview> {
     totalSubjects,
     awaitingPublication,
     publishedResults,
+    awaiting: awaiting.map((r) => ({
+      studentName: `${r.student.user.firstName} ${r.student.user.lastName}`,
+      admissionNumber: r.student.admissionNumber,
+      className: r.class.section ? `${r.class.name} ${r.class.section}` : r.class.name,
+      termKey: termKey(r.term.session.name, r.term.name),
+      termLabel: termLabel(r.term.session.name, r.term.name),
+      submittedAt: r.updatedAt,
+    })),
     recentAnnouncements: announcements.map((a) => ({ title: a.title, target: a.targetClass ? (a.targetClass.section ? `${a.targetClass.name} ${a.targetClass.section}` : a.targetClass.name) : "Whole school", published: a.isPublished, updatedAt: a.updatedAt })),
     recent: recent.rows,
   }

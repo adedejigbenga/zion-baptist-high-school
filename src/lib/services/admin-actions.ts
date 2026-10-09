@@ -22,7 +22,7 @@ export type ActionState = {
   message?: string
   /** What is missing / wrong, one line each (publish). */
   issues?: string[]
-  fieldErrors?: Partial<Record<"title" | "content" | "target" | "expires", string>>
+  fieldErrors?: Partial<Record<"title" | "content" | "target" | "expires" | "publishOn", string>>
   at?: number
 }
 
