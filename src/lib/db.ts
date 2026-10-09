@@ -23,6 +23,9 @@ function createPrismaClient() {
     connectionString,
     // Small pool: serverless instances each hold their own pool.
     max: 5,
+    // A hosted database that scales to zero (Neon) needs a moment to wake: wait for it, but never hang forever.
+    connectionTimeoutMillis: 15_000,
+    idleTimeoutMillis: 30_000,
   })
 
   return new PrismaClient({ adapter })
