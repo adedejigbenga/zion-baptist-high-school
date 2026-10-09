@@ -76,10 +76,11 @@ export default async function AdminAcademicsPage() {
                     ]}
                     submitLabel="Save dates"
                   />
-                  {!s.isCurrent && (
+                  {(
                     <FormDialog
+                      triggerDisabled={s.isCurrent}
                       title={`Make ${s.name} the current session?`} description="It becomes the session teachers, students and results work in. The current session stops being current but keeps all its records. The current term is set to the term running today (or the first term)."
-                      triggerLabel="Set as current" triggerIcon={<CalendarCheckIcon aria-hidden="true" />} triggerSize="sm"
+                      triggerLabel={s.isCurrent ? "Current session" : "Set as current"} triggerIcon={<CalendarCheckIcon aria-hidden="true" />} triggerSize="sm"
                       action={setCurrentSessionAction} hidden={{ sessionKey: s.key }} submitLabel="Yes, make current"
                     />
                   )}
@@ -109,10 +110,11 @@ export default async function AdminAcademicsPage() {
                               ]}
                               submitLabel="Save term"
                             />
-                            {s.isCurrent && !t.isCurrent && (
+                            {s.isCurrent && (
                               <FormDialog
+                                triggerDisabled={t.isCurrent}
                                 title={`Make ${t.label} the current term?`} description="Teachers will enter results for this term and students will see its result."
-                                triggerLabel={<><span className="sr-only">Make {t.label} current</span><span aria-hidden="true">Set current</span></>} triggerSize="sm"
+                                triggerLabel={<><span className="sr-only">{t.isCurrent ? `${t.label} is the current term` : `Make ${t.label} current`}</span><span aria-hidden="true">{t.isCurrent ? "Current" : "Set current"}</span></>} triggerSize="sm"
                                 action={setCurrentTermAction} hidden={{ sessionKey: s.key, term: t.name }} submitLabel="Yes, make current"
                               />
                             )}

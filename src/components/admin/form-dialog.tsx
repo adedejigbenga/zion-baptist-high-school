@@ -159,7 +159,7 @@ function Body({
 }
 
 function FormDialog({
-  title, description, triggerLabel, triggerIcon, triggerVariant = "default", triggerSize = "default",
+  title, description, triggerLabel, triggerIcon, triggerVariant = "default", triggerSize = "default", triggerDisabled = false,
   action, fields = [], hidden = {}, submitLabel = "Save", destructive = false, testId, wide = false,
 }: {
   title: string
@@ -168,6 +168,8 @@ function FormDialog({
   triggerIcon?: React.ReactNode
   triggerVariant?: "default" | "outline" | "destructive"
   triggerSize?: "default" | "sm"
+  /** Keep the dialog mounted (so its result stays visible) even when the action stops being available. */
+  triggerDisabled?: boolean
   action: Action
   fields?: FieldSpec[]
   hidden?: Record<string, string>
@@ -189,7 +191,7 @@ function FormDialog({
         if (!next) setGeneration((g) => g + 1)
       }}
     >
-      <Dialog.Trigger render={<Button type="button" variant={triggerVariant} size={triggerSize} data-testid={testId} />}>
+      <Dialog.Trigger render={<Button type="button" variant={triggerVariant} size={triggerSize} data-testid={testId} disabled={triggerDisabled} />}>
         {triggerIcon}
         {triggerLabel}
       </Dialog.Trigger>
