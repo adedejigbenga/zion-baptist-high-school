@@ -3,7 +3,7 @@ import Form from "next/form"
 import Link from "next/link"
 import { PlusIcon } from "lucide-react"
 
-import { ActiveBadge, EmptyRow, PageHeader, Pagination, SearchBar, toPage, toText } from "@/components/admin/common"
+import { ActiveBadge, EmptyRow, PageHeader, Pagination, toPage, toText } from "@/components/admin/common"
 import { FormDialog } from "@/components/admin/form-dialog"
 import { newStudentFields } from "@/components/admin/people-fields"
 import { Button } from "@/components/ui/button"

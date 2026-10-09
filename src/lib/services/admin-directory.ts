@@ -41,11 +41,14 @@ function nameSearch(query: string, idField: "admissionNumber" | "employeeNumber"
 export async function loadAdminOverview(): Promise<AdminOverview> {
   const session = await db.academicSession.findFirst({ where: { isCurrent: true }, select: { name: true } })
   const term = await db.term.findFirst({ where: { isCurrent: true }, select: { name: true } })
-  const [totalStudents, totalTeachers, activeClasses, awaitingPublication, recent] = await Promise.all([
+  const [totalStudents, totalTeachers, activeClasses, totalSubjects, awaitingPublication, publishedResults, announcements, recent] = await Promise.all([
     db.student.count({ where: { user: { isActive: true } } }),
     db.teacher.count({ where: { user: { isActive: true } } }),
     db.schoolClass.count({ where: { isActive: true } }),
+    db.subject.count({ where: { isActive: true } }),
     db.result.count({ where: { status: "SUBMITTED" } }),
+    db.result.count({ where: { status: "PUBLISHED" } }),
+    db.announcement.findMany({ orderBy: { updatedAt: "desc" }, take: 4, select: { title: true, isPublished: true, updatedAt: true, targetClass: { select: { name: true, section: true } } } }),
     loadAuditLogs({ page: 1, action: "", entityType: "" }, 6),
   ])
   return {
@@ -54,7 +57,10 @@ export async function loadAdminOverview(): Promise<AdminOverview> {
     totalStudents,
     totalTeachers,
     activeClasses,
+    totalSubjects,
     awaitingPublication,
+    publishedResults,
+    recentAnnouncements: announcements.map((a) => ({ title: a.title, target: a.targetClass ? (a.targetClass.section ? `${a.targetClass.name} ${a.targetClass.section}` : a.targetClass.name) : "Whole school", published: a.isPublished, updatedAt: a.updatedAt })),
     recent: recent.rows,
   }
 }

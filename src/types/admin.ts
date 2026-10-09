@@ -16,7 +16,10 @@ export type AdminOverview = {
   totalStudents: number
   totalTeachers: number
   activeClasses: number
+  totalSubjects: number
   awaitingPublication: number
+  publishedResults: number
+  recentAnnouncements: { title: string; target: string; published: boolean; updatedAt: Date }[]
   recent: AuditRow[]
 }
 

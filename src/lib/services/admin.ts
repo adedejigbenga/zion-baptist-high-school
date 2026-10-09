@@ -15,6 +15,9 @@ import {
   loadTeachers,
   type AuditFilter,
 } from "@/lib/services/admin-directory"
+import { loadSessions } from "@/lib/services/admin-academics"
+import { loadClassDetail, loadClassList, loadSubjectDetail, loadSubjectList } from "@/lib/services/admin-classes"
+import { loadGrading } from "@/lib/services/admin-grading"
 import { loadPersonOptions, loadStudentDetail, loadTeacherDetail } from "@/lib/services/admin-people"
 import { loadFilterOptions, loadResultList, loadResultReview } from "@/lib/services/admin-results"
 import type { ResultFilters } from "@/types/admin"
@@ -94,4 +97,29 @@ export async function getTeacherDetail(loginId: string) {
 export async function getStudentDetail(admissionNumber: string) {
   await requireRole("ADMIN")
   return loadStudentDetail(admissionNumber)
+}
+
+export async function getSessions() {
+  await requireRole("ADMIN")
+  return loadSessions()
+}
+export async function getClassList() {
+  await requireRole("ADMIN")
+  return loadClassList()
+}
+export async function getClassDetail(key: string) {
+  await requireRole("ADMIN")
+  return loadClassDetail(key)
+}
+export async function getSubjectList() {
+  await requireRole("ADMIN")
+  return loadSubjectList()
+}
+export async function getSubjectDetail(code: string) {
+  await requireRole("ADMIN")
+  return loadSubjectDetail(code)
+}
+export async function getGrading() {
+  await requireRole("ADMIN")
+  return loadGrading()
 }
