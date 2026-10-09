@@ -81,7 +81,7 @@ export default async function AdminResultReviewPage({ searchParams }: { searchPa
                   <TableHead>Grade</TableHead>
                   <TableHead className="hidden md:table-cell">Remark</TableHead>
                   <TableHead>Teacher</TableHead>
-                  {status === "SUBMITTED" && <TableHead><span className="sr-only">Actions</span></TableHead>}
+                  {status !== "PUBLISHED" && <TableHead><span className="sr-only">Actions</span></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -98,10 +98,11 @@ export default async function AdminResultReviewPage({ searchParams }: { searchPa
                     <TableCell>
                       {s.entryStatus === "SUBMITTED" ? <Badge variant="info">Submitted</Badge> : s.entryStatus === "DRAFT" ? <Badge variant="warning">Draft</Badge> : <Badge variant="destructive">Missing</Badge>}
                     </TableCell>
-                    {status === "SUBMITTED" && (
+                    {status !== "PUBLISHED" && (
                       <TableCell>
-                        {s.entryStatus === "SUBMITTED" && (
+                        {s.entryStatus !== "MISSING" && (
                           <FormDialog
+                            triggerDisabled={s.entryStatus !== "SUBMITTED"}
                             title={`Return ${s.name} for correction?`}
                             description="The teacher will be able to edit this subject and submit it again. The scores are kept, and the result goes back to draft until every subject is submitted."
                             triggerLabel={<><span className="sr-only">Return {s.name} for correction</span><span aria-hidden="true">Return</span></>}
