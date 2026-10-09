@@ -44,6 +44,31 @@ export async function loadCurrentPeriod(): Promise<CurrentPeriod | null> {
   return { sessionId: session.id, sessionName: session.name, termId: term.id, termName: term.name }
 }
 
+/** The term keys the browser may name ("first", "second", "third"): a reference to a term of the CURRENT session, never an ID. */
+export const TERM_KEYS: Record<string, TermName> = { first: "FIRST", second: "SECOND", third: "THIRD" }
+export const termKeyOf = (name: TermName) => name.toLowerCase()
+
+export type PeriodChoice = { key: string; name: TermName; current: boolean }
+
+/**
+ * The period a teacher is working in: the CURRENT session, and either its current term (nothing requested) or the
+ * requested term of that same session. A term key that is unknown, or that has not been set up for the session, gives null
+ * (the caller refuses it). Teachers work only in the current session; earlier sessions stay read-only history.
+ */
+export async function loadPeriod(termKey?: string | null): Promise<{ period: CurrentPeriod; choices: PeriodChoice[] } | null> {
+  const session = await db.academicSession.findFirst({ where: { isCurrent: true }, select: { id: true, name: true } })
+  if (!session) return null
+  const terms = await db.term.findMany({ where: { sessionId: session.id }, orderBy: { startDate: "asc" }, select: { id: true, name: true, isCurrent: true } })
+  const wanted = termKey ? TERM_KEYS[termKey] : undefined
+  if (termKey && !wanted) return null
+  const term = wanted ? terms.find((t) => t.name === wanted) : terms.find((t) => t.isCurrent)
+  if (!term) return null
+  return {
+    period: { sessionId: session.id, sessionName: session.name, termId: term.id, termName: term.name },
+    choices: terms.map((t) => ({ key: termKeyOf(t.name), name: t.name, current: t.isCurrent })),
+  }
+}
+
 export type AssignmentRef = {
   classId: string
   classKey: string
@@ -207,10 +232,15 @@ const MAX_QUERY = 60
 
 export async function loadWorkspace(
   actor: Actor,
-  params: { classKey?: string; subjectCode?: string; query?: string },
+  params: { classKey?: string; subjectCode?: string; query?: string; term?: string },
 ): Promise<TeacherWorkspace> {
-  const period = await loadCurrentPeriod()
-  if (!period) return { kind: "NO_TERM" }
+  if (!(await loadCurrentPeriod())) return { kind: "NO_TERM" }
+  const chosen = await loadPeriod(params.term || null)
+  if (!chosen) {
+    await recordAccessDenied(actor, "view", { classKey: params.classKey, subjectCode: params.subjectCode })
+    return { kind: "NOT_AUTHORIZED" }
+  }
+  const { period, choices } = chosen
 
   const assignments = await listAssignments(actor.teacherId, period.sessionId)
   if (assignments.length === 0) return { kind: "NO_ASSIGNMENTS", sessionName: period.sessionName, termName: period.termName }
@@ -265,6 +295,8 @@ export async function loadWorkspace(
     kind: "READY",
     sessionName: period.sessionName,
     termName: period.termName,
+    terms: choices,
+    termKey: termKeyOf(period.termName),
     options,
     selected: { classKey: selected.classKey, className: selected.className, subjectCode: selected.subjectCode, subjectName: selected.subjectName },
     scheme: scheme.scheme,

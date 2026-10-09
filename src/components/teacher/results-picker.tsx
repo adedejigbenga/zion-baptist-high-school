@@ -12,14 +12,14 @@ import type { WorkspaceOption } from "@/types/teacher"
  * Class and subject selectors. They only offer this teacher's own assignments, and they submit keys ("jss-1", "MTH")
  * as a plain GET form. Whatever arrives is checked against the teacher's assignments again on the server.
  */
-function ResultsPicker({ options, classKey, subjectCode }: { options: WorkspaceOption[]; classKey: string; subjectCode: string }) {
+function ResultsPicker({ options, classKey, subjectCode, terms, termKey, sessionName }: { options: WorkspaceOption[]; classKey: string; subjectCode: string; terms: { key: string; name: string; current: boolean }[]; termKey: string; sessionName: string }) {
   const formRef = React.useRef<HTMLFormElement>(null)
   const [selectedClass, setSelectedClass] = React.useState(classKey)
   const [selectedSubject, setSelectedSubject] = React.useState(subjectCode)
   const subjects = options.find((o) => o.classKey === selectedClass)?.subjects ?? []
 
   return (
-    <Form ref={formRef} action="/portal/teacher/results" className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+    <Form ref={formRef} action="/portal/teacher/results" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
       <div className="flex flex-col gap-2">
         <Label htmlFor="class-select">Class</Label>
         <NativeSelect
@@ -45,6 +45,17 @@ function ResultsPicker({ options, classKey, subjectCode }: { options: WorkspaceO
           {subjects.map((s) => (
             <option key={s.code} value={s.code}>
               {s.name}
+            </option>
+          ))}
+        </NativeSelect>
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="term-select">Term ({sessionName})</Label>
+        <NativeSelect id="term-select" name="term" defaultValue={termKey}>
+          {terms.map((t) => (
+            <option key={t.key} value={t.key}>
+              {t.name === "FIRST" ? "First Term" : t.name === "SECOND" ? "Second Term" : "Third Term"}
+              {t.current ? " (current)" : ""}
             </option>
           ))}
         </NativeSelect>

@@ -48,6 +48,7 @@ function ResultsForm({ workspace }: { workspace: Ready }) {
     <form id={FORM_ID} action={formAction} className="flex flex-col gap-4" noValidate>
       <input type="hidden" name="classKey" value={selected.classKey} />
       <input type="hidden" name="subjectCode" value={selected.subjectCode} />
+      <input type="hidden" name="term" value={workspace.termKey} />
 
       <div ref={messageRef} tabIndex={-1} className="outline-none" aria-live="polite">
         {state.status === "success" && (

@@ -7,6 +7,7 @@ export const saveRequestSchema = z.object({
   classKey: z.string().min(1).max(60),
   subjectCode: z.string().min(1).max(60),
   intent: z.enum(["draft", "submit"]),
+  term: z.enum(["", "first", "second", "third"]).default(""),
 })
 
 const CELL_NAME = /^score::(.+?)::(.+)$/
@@ -24,6 +25,7 @@ export function parseSaveForm(formData: FormData): ParsedSaveForm {
     classKey: formData.get("classKey"),
     subjectCode: formData.get("subjectCode"),
     intent: formData.get("intent"),
+    term: formData.get("term") ?? "",
   })
   if (!parsed.success) return { ok: false }
 

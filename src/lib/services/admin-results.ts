@@ -312,3 +312,60 @@ export async function unpublishResult(actor: AdminActor, request: { admission: s
     { timeout: 20_000 },
   )
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// Return for correction
+// ---------------------------------------------------------------------------------------------------------
+
+/**
+ * Sends ONE subject of a submitted (not yet published) result back to its teacher for correction: that subject's entry goes
+ * back to DRAFT and the result goes back to DRAFT, so the teacher can edit and submit again. Scores are kept. Nothing about a
+ * published result can be changed this way (unpublish it first), and the reason is recorded in the audit log.
+ */
+export async function returnForCorrection(
+  actor: AdminActor,
+  request: { admission: string; termKey: string; subjectCode: string; reason: string },
+): Promise<PublishOutcome> {
+  if (!(await isActiveAdmin(actor.userId))) return refuseUnauthorized(actor.userId, "return-for-correction")
+
+  const reason = request.reason.trim()
+  if (reason.length < 3 || reason.length > 300) return { ok: false, code: "INVALID", message: "Give a short reason (3 to 300 characters)." }
+
+  return db.$transaction(
+    async (tx): Promise<PublishOutcome> => {
+      const result = await findResult(tx, request.admission, request.termKey)
+      if (!result) return { ok: false, code: "NOT_FOUND", message: "That result could not be found." }
+      if (result.status === "PUBLISHED") return { ok: false, code: "NOT_READY", message: "This result is published. Unpublish it first if it needs correcting." }
+
+      const entry = await tx.resultEntry.findFirst({
+        where: { resultId: result.id, subject: { code: request.subjectCode } },
+        select: { id: true, status: true, subject: { select: { code: true, name: true } } },
+      })
+      if (!entry) return { ok: false, code: "NOT_FOUND", message: "That subject has no entry for this result." }
+      if (entry.status !== "SUBMITTED") return { ok: false, code: "NOT_READY", message: "Only a submitted subject can be returned. This one is still a draft." }
+
+      const entryUpdated = await tx.resultEntry.updateMany({ where: { id: entry.id, status: "SUBMITTED" }, data: { status: "DRAFT" } })
+      const resultUpdated = await tx.result.updateMany({ where: { id: result.id, status: { not: "PUBLISHED" } }, data: { status: "DRAFT" } })
+      if (entryUpdated.count !== 1 || resultUpdated.count !== 1) return { ok: false, code: "CHANGED", message: "This result was changed by someone else. Reload and try again." }
+
+      await tx.auditLog.create({
+        data: {
+          userId: actor.userId,
+          action: "RESULT_RETURNED_FOR_CORRECTION",
+          entityType: "ResultEntry",
+          entityId: entry.id,
+          metadata: {
+            admissionNumber: result.student.admissionNumber,
+            class: classLabel(result.class.name, result.class.section),
+            subject: entry.subject.code,
+            term: result.term.name,
+            session: result.session.name,
+            reason,
+          },
+        },
+      })
+      return { ok: true, message: `${entry.subject.name} was returned to its teacher for correction. The scores are kept and the teacher can edit and submit again.` }
+    },
+    { timeout: 20_000 },
+  )
+}

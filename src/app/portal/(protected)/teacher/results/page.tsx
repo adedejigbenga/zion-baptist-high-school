@@ -24,7 +24,7 @@ const single = (v: string | string[] | undefined) => (Array.isArray(v) ? "" : v)
  */
 export default async function TeacherResultsPage({ searchParams }: { searchParams: Promise<Params> }) {
   const params = await searchParams
-  const workspace = await getTeacherWorkspace(single(params.class), single(params.subject), single(params.q))
+  const workspace = await getTeacherWorkspace(single(params.class), single(params.subject), single(params.q), single(params.term))
 
   return (
     <div className="stack-page">
@@ -74,11 +74,12 @@ export default async function TeacherResultsPage({ searchParams }: { searchParam
 
       {workspace.kind === "READY" && (
         <>
-          <ResultsPicker options={workspace.options} classKey={workspace.selected.classKey} subjectCode={workspace.selected.subjectCode} />
+          <ResultsPicker options={workspace.options} classKey={workspace.selected.classKey} subjectCode={workspace.selected.subjectCode} terms={workspace.terms} termKey={workspace.termKey} sessionName={workspace.sessionName} />
 
           <Form action="/portal/teacher/results" className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <input type="hidden" name="class" value={workspace.selected.classKey} />
             <input type="hidden" name="subject" value={workspace.selected.subjectCode} />
+            <input type="hidden" name="term" value={workspace.termKey} />
             <div className="flex flex-1 flex-col gap-2">
               <Label htmlFor="student-search">Find a student</Label>
               <SearchInput id="student-search" name="q" defaultValue={workspace.query} placeholder="Name or admission number" maxLength={80} autoComplete="off" />
@@ -88,7 +89,7 @@ export default async function TeacherResultsPage({ searchParams }: { searchParam
             </Button>
             {workspace.query && (
               <Link
-                href={`/portal/teacher/results?class=${workspace.selected.classKey}&subject=${workspace.selected.subjectCode}`}
+                href={`/portal/teacher/results?class=${workspace.selected.classKey}&subject=${workspace.selected.subjectCode}&term=${workspace.termKey}`}
                 className="inline-flex min-h-11 items-center rounded-sm px-2 type-label text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
                 Clear
@@ -103,7 +104,7 @@ export default async function TeacherResultsPage({ searchParams }: { searchParam
                 {workspace.totalStudents} {workspace.totalStudents === 1 ? "student" : "students"}
               </span>
             </h2>
-            <ResultsForm key={`${workspace.selected.classKey}:${workspace.selected.subjectCode}:${workspace.query}`} workspace={workspace} />
+            <ResultsForm key={`${workspace.selected.classKey}:${workspace.selected.subjectCode}:${workspace.termKey}:${workspace.query}`} workspace={workspace} />
           </section>
         </>
       )}

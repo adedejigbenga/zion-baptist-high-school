@@ -70,6 +70,9 @@ export type TeacherWorkspace =
       kind: "READY"
       sessionName: string
       termName: TermName
+      /** The terms of the current session the teacher can choose between. */
+      terms: { key: string; name: TermName; current: boolean }[]
+      termKey: string
       options: WorkspaceOption[]
       selected: { classKey: string; className: string; subjectCode: string; subjectName: string }
       scheme: GradingScheme

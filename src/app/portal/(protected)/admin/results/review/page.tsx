@@ -4,6 +4,7 @@ import { notFound } from "next/navigation"
 import { AlertCircleIcon, ArrowLeftIcon, CheckCircle2Icon, ClockIcon, ShieldAlertIcon } from "lucide-react"
 
 import { PageHeader, ResultStatusBadge, toText } from "@/components/admin/common"
+import { FormDialog } from "@/components/admin/form-dialog"
 import { ResultActions } from "@/components/admin/result-actions"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -12,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { TERM_LABEL } from "@/lib/academic"
 import { formatDateTime, formatScore } from "@/lib/format"
 import { getResultReview } from "@/lib/services/admin"
+import { returnForCorrectionAction } from "@/lib/services/admin-result-actions"
 
 export const metadata: Metadata = { title: "Review Result" }
 
@@ -79,6 +81,7 @@ export default async function AdminResultReviewPage({ searchParams }: { searchPa
                   <TableHead>Grade</TableHead>
                   <TableHead className="hidden md:table-cell">Remark</TableHead>
                   <TableHead>Teacher</TableHead>
+                  {status === "SUBMITTED" && <TableHead><span className="sr-only">Actions</span></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -95,6 +98,22 @@ export default async function AdminResultReviewPage({ searchParams }: { searchPa
                     <TableCell>
                       {s.entryStatus === "SUBMITTED" ? <Badge variant="info">Submitted</Badge> : s.entryStatus === "DRAFT" ? <Badge variant="warning">Draft</Badge> : <Badge variant="destructive">Missing</Badge>}
                     </TableCell>
+                    {status === "SUBMITTED" && (
+                      <TableCell>
+                        {s.entryStatus === "SUBMITTED" && (
+                          <FormDialog
+                            title={`Return ${s.name} for correction?`}
+                            description="The teacher will be able to edit this subject and submit it again. The scores are kept, and the result goes back to draft until every subject is submitted."
+                            triggerLabel={<><span className="sr-only">Return {s.name} for correction</span><span aria-hidden="true">Return</span></>}
+                            triggerVariant="outline" triggerSize="sm" testId={`return-${s.code}`}
+                            action={returnForCorrectionAction}
+                            hidden={{ admission: review.student.admissionNumber, termKey: review.termKey, subjectCode: s.code }}
+                            fields={[{ name: "reason", label: "Reason (shown in the audit log)", kind: "textarea", maxLength: 300 }]}
+                            submitLabel="Return to teacher"
+                          />
+                        )}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

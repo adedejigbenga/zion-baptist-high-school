@@ -4,7 +4,7 @@ import type { Prisma } from "@/generated/prisma/client"
 import { db } from "@/lib/db"
 import { calculateEntry, parseScoreInput } from "@/lib/services/grading"
 import {
-  loadCurrentPeriod,
+  loadPeriod,
   loadDefaultScheme,
   loadRosterState,
   listAssignments,
@@ -35,6 +35,8 @@ export type SaveRequest = {
   classKey: string
   subjectCode: string
   intent: "draft" | "submit"
+  /** "first" | "second" | "third" (a term of the current session); empty = the current term. */
+  term?: string
   /** admission number -> component shortName -> text typed by the teacher */
   cells: Record<string, Record<string, string>>
 }
@@ -68,8 +70,15 @@ const fail = (code: SaveFailure["code"], message: string, extra: Partial<Pick<Sa
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`
 
 export async function saveSubjectResults(actor: Actor, request: SaveRequest): Promise<SaveOutcome> {
-  const period = await loadCurrentPeriod()
-  if (!period) return fail("NO_TERM", "There is no current term, so results cannot be entered yet.")
+  const chosen = await loadPeriod(request.term || null)
+  if (!chosen) {
+    if (request.term) {
+      await recordAccessDenied(actor, "save", { classKey: request.classKey, subjectCode: request.subjectCode })
+      return fail("NOT_AUTHORIZED", "That term is not available for this session.")
+    }
+    return fail("NO_TERM", "There is no current term, so results cannot be entered yet.")
+  }
+  const { period } = chosen
 
   // 1. AUTHORIZATION: is this class + subject one of this teacher's assignments for the current session?
   const assignments = await listAssignments(actor.teacherId, period.sessionId)

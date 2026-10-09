@@ -41,9 +41,9 @@ export const getTeacherOverview = cache(async (): Promise<TeacherOverview> => {
 
 /** The results workspace for `classKey` + `subjectCode` (both optional; missing = the teacher's first assignment). */
 export const getTeacherWorkspace = cache(
-  async (classKey: string | undefined, subjectCode: string | undefined, query: string | undefined): Promise<TeacherWorkspace> => {
+  async (classKey: string | undefined, subjectCode: string | undefined, query: string | undefined, term?: string): Promise<TeacherWorkspace> => {
     const actor = await currentTeacher()
-    return loadWorkspace(actor, { classKey, subjectCode, query })
+    return loadWorkspace(actor, { classKey, subjectCode, query, term })
   },
 )
 
