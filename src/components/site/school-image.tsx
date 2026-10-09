@@ -44,6 +44,7 @@ function SchoolImage({
   sizes = "(min-width: 1024px) 50vw, 100vw",
   priority = false,
   showLabel = true,
+  position,
 }: {
   slot: ImageSlot
   className?: string
@@ -51,12 +52,15 @@ function SchoolImage({
   priority?: boolean
   /** Print the slot's label on the placeholder (turn off where a caption already names it). */
   showLabel?: boolean
+  /** CSS object-position for the crop (e.g. "50% 30%" keeps the upper part of a tall picture). */
+  position?: string
 }) {
   const config = siteImages[slot]
   if (config.src) {
     return (
       <div className={cn("relative overflow-hidden bg-brand-100", className)}>
-        <Image src={config.src} alt={config.alt} fill sizes={sizes} priority={priority} className="object-cover" />
+        {/* SVG illustrations are already tiny and vector: skip the raster optimiser (which refuses SVG by default). */}
+        <Image src={config.src} alt={config.alt} fill sizes={sizes} priority={priority} unoptimized={config.src.endsWith(".svg")} className="object-cover" style={position ? { objectPosition: position } : undefined} />
       </div>
     )
   }

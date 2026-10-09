@@ -44,7 +44,7 @@ export default function StudentLifePage() {
 
       <Section id="gallery" eyebrow="Gallery" title="Moments from school life">
         <GalleryGrid />
-        <p className="type-caption font-normal text-muted-foreground">Photographs coming soon.</p>
+        <p className="type-caption font-normal text-muted-foreground">Illustrations are shown until the school adds its own photographs.</p>
       </Section>
 
       <Section id="alumni" tone="subtle" eyebrow="Alumni" title="Our alumni" description="Former students remain part of the Zion Baptist High School family. An alumni page and contact form will be added; until then, alumni are welcome to get in touch through the school office."/>

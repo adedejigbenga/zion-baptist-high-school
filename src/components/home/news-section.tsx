@@ -31,6 +31,7 @@ export function NewsVisual({ item }: { item: NewsItem }) {
           alt={item.image.alt}
           fill
           sizes="(min-width: 768px) 33vw, 100vw"
+          unoptimized={item.image.src.endsWith(".svg")}
           className="object-cover"
         />
       </div>

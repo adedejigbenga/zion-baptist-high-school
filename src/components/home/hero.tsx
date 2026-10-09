@@ -17,7 +17,7 @@ function Hero() {
     <section aria-labelledby="hero-heading" className="relative isolate overflow-hidden bg-brand-950">
       <div aria-hidden="true" className="absolute inset-0 -z-20">
         {hasPhoto ? (
-          <SchoolImage slot="hero" priority sizes="100vw" className="size-full" />
+          <SchoolImage slot="hero" priority sizes="100vw" position="50% 38%" className="size-full" />
         ) : (
           <CampusIllustration className="size-full object-cover opacity-45 mix-blend-luminosity" />
         )}

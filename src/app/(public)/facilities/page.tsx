@@ -44,7 +44,7 @@ export default function FacilitiesPage() {
           <SchoolImage slot="assembly" className="aspect-[4/3] rounded-xl" />
           <SchoolImage slot="classrooms" className="aspect-[4/3] rounded-xl" />
         </div>
-        <p className="type-caption font-normal text-muted-foreground">Photographs coming soon.</p>
+        <p className="type-caption font-normal text-muted-foreground">Illustrations are shown until the school adds its own photographs.</p>
       </Section>
 
       <CtaBand
